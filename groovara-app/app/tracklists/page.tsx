@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
+import InlineNotice from "../../lib/InlineNotice";
+
 
 type Tracklist = {
   id: string;
@@ -10,6 +12,7 @@ type Tracklist = {
   description: string | null;
   created_at: string;
 };
+
 
 export default function TracklistsPage() {
   const [items, setItems] = useState<Tracklist[]>([]);
@@ -43,7 +46,7 @@ export default function TracklistsPage() {
 
     const { error } = await supabase.from("tracklists").delete().eq("id", id);
     if (error) {
-      alert(error.message);
+      setErr(error.message);
       return;
     }
     setItems((prev) => prev.filter((t) => t.id !== id));
@@ -63,11 +66,27 @@ export default function TracklistsPage() {
       </div>
 
       {loading && <p className="mt-6 text-gray-400">Loading…</p>}
-      {err && <p className="mt-6 text-red-300">{err}</p>}
+
+      {err && (
+        <div className="mt-6">
+          <InlineNotice
+            kind="error"
+            title="Couldn’t load your tracklists"
+            message={err}
+          />
+        </div>
+      )}
 
       {!loading && !err && items.length === 0 && (
-        <p className="mt-6 text-gray-400">No Tracklists yet.</p>
+        <div className="mt-6">
+          <InlineNotice
+            kind="info"
+            title="No tracklists yet"
+            message="Create your first tracklist to start building something worth sharing."
+          />
+        </div>
       )}
+
 
       <div className="mt-8 space-y-3">
         {items.map((t) => (
@@ -86,7 +105,6 @@ export default function TracklistsPage() {
                 <p className="mt-1 text-sm text-gray-400">{t.description}</p>
               )}
             </div>
-
             <button
               onClick={() => remove(t.id)}
               className="text-xs tracking-widest text-gray-400 hover:text-red-300 transition"

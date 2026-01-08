@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../lib/supabaseClient";
 import Link from "next/link";
-
+import InlineNotice from "../../../lib/InlineNotice";
 
 type Mixlist = {
   id: string;
@@ -29,10 +29,41 @@ export default function MixlistPage() {
   const [mix, setMix] = useState<Mixlist | null>(null);
   const [songs, setSongs] = useState<MixSong[]>([]);
   const [loading, setLoading] = useState(true);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  
+
 
   // local reveal state (we can persist later)
   const [revealedSlots, setRevealedSlots] = useState(1); // how many song "cards" exist
   const [clicked, setClicked] = useState<boolean[]>([]);  // whether each slot has been clicked to reveal details
+
+  async function handleCopyLink() {
+  try {
+    const url = window.location.href;
+
+    // Modern clipboard API
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      // Fallback
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+
+    setCopyStatus("Copied link.");
+    setTimeout(() => setCopyStatus(null), 1500);
+  } catch {
+    setCopyStatus("Couldn’t copy. Copy from the address bar.");
+    setTimeout(() => setCopyStatus(null), 2500);
+  }
+}
+
 
   useEffect(() => {
     const run = async () => {
@@ -42,15 +73,24 @@ export default function MixlistPage() {
         .from("mixlists")
         .select("id,message,finishing_note,reveal_mode")
         .eq("id", mixlistId)
-        .single();
+        .maybeSingle();
 
       if (mixErr) {
-        alert(mixErr.message);
+        setErr("Couldn’t load this mixlist. Please try again.");
         setLoading(false);
         return;
       }
 
+      if (!mixData) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+
+      
+
       setMix(mixData as Mixlist);
+
 
       const { data: songData, error: songErr } = await supabase
         .from("mixlist_songs")
@@ -59,7 +99,7 @@ export default function MixlistPage() {
         .order("position", { ascending: true });
 
       if (songErr) {
-        alert(songErr.message);
+        setErr("Couldn’t load songs for this mixlist. Please try again.");
         setLoading(false);
         return;
       }
@@ -74,21 +114,46 @@ export default function MixlistPage() {
     void run();
   }, [mixlistId]);
 
-  if (loading) {
-    return (
-      <main className="p-10 text-gray-200">
-        <p className="text-gray-400">Loading…</p>
-      </main>
-    );
-  }
+if (loading) {
+  return (
+    <main className="p-10 text-gray-200">
+      <p className="text-gray-400">Loading…</p>
+    </main>
+  );
+}
 
-  if (!mix) {
-    return (
-      <main className="p-10 text-gray-200">
-        <p className="text-red-300">Mixlist not found.</p>
-      </main>
-    );
-  }
+if (notFound) {
+  return (
+    <main className="p-6 text-white/90">
+      <InlineNotice
+        kind="error"
+        title="Mixlist not found"
+        message="This link may be wrong, deleted, or you may not have access."
+      />
+    </main>
+  );
+}
+
+if (err) {
+  return (
+    <main className="p-6 text-white/90">
+      <InlineNotice kind="error" title="Something went wrong" message={err} />
+    </main>
+  );
+}
+
+if (!mix) {
+  return (
+    <main className="p-6 text-white/90">
+      <InlineNotice
+        kind="error"
+        title="Mixlist not found"
+        message="This link may be wrong, deleted, or you may not have access."
+      />
+    </main>
+  );
+}
+
 
 const visibleCount = mix.reveal_mode ? Math.min(revealedSlots, songs.length) : songs.length;
 const visibleSongs = songs.slice(0, visibleCount);
@@ -106,22 +171,38 @@ const canRevealNext =
 
   return (
     <main className="p-10 text-gray-200">
+     <div className="max-w-2xl flex items-center justify-between">
       <h1 className="text-2xl font-light tracking-wide">Mixlist</h1>
-      <div className="mt-2">
-        <Link
-            href="/"
-            className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
+        <button
+          onClick={handleCopyLink}
+          className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
         >
-             ← HOME
-        </Link>
+          COPY LINK
+        </button>
+      </div>
+      
+    <div className="mt-2 max-w-2xl flex items-center gap-4">
+      <Link
+        href="/"
+        className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
+      >
+        ← HOME
+      </Link>
+      
+      {copyStatus && (
+        <span className="text-xs tracking-widest text-gray-500">
+          {copyStatus}
+        </span>
+      )}
     </div>
-
-      {mix.message ? (
-        <div className="mt-6 max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-5">
-          <p className="text-sm text-gray-200 whitespace-pre-wrap">{mix.message}</p>
-        </div>
-      ) : null}
-
+    
+      {songs.length === 0 && (
+        <InlineNotice
+          kind="info"
+          title="This mixlist is empty"
+          message="The creator didn’t include any songs."
+        />
+      )}
       <div className="mt-8 space-y-2 max-w-2xl">
         {visibleSongs.map((s, idx) => {
           const isHidden = mix.reveal_mode && !clicked[idx];
@@ -168,7 +249,6 @@ const canRevealNext =
         })}
 
       </div>
-
         {mix.reveal_mode && revealedSlots < songs.length ? (
           <button
             onClick={() => setRevealedSlots((r) => Math.min(r + 1, songs.length))}

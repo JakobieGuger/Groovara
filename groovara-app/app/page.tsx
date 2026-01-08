@@ -3,17 +3,6 @@ import Link from "next/link";
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#0b0a0f] text-gray-200">
-      {/* Header */}
-      <header className="flex items-center justify-between px-10 py-6">
-        <h1 className="text-sm tracking-[0.35em] font-medium text-purple-300">
-          GROOVARA
-        </h1>
-        <nav className="space-x-8 text-xs tracking-widest text-gray-400">
-          <a href="#" className="hover:text-purple-300 transition">HOME</a>
-          <a href="#" className="hover:text-purple-300 transition">LIST</a>
-        </nav>
-      </header>
-
       {/* Hero */}
       <section
         className="relative h-[65vh] bg-cover bg-center"

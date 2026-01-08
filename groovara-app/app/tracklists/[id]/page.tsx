@@ -5,6 +5,8 @@ import Link from "next/link";
 import { supabase } from "../../../lib/supabaseClient";
 import { useParams, useRouter } from "next/navigation";
 import { SpotifySearch, type SpotifySearchResult } from "../../../lib/SpotifySearch";
+import InlineNotice from "../../../lib/InlineNotice";
+
 
 
 
@@ -33,17 +35,26 @@ export default function TracklistDetailPage() {
   const [mixReveal, setMixReveal] = useState(true);
   const [creatingMix, setCreatingMix] = useState(false);
   const [mixFinish, setMixFinish] = useState("");
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [pageInfo, setPageInfo] = useState<string | null>(null);
+
+  const DEV_MANUAL_ADD =
+  process.env.NEXT_PUBLIC_DEV_MANUAL_ADD === "true";
 
 
 
 
   type TrackSong = {
   id: string;
+  tracklist_id: string;
   position: number;
   title: string;
   artist: string;
   album: string | null;
   url: string;
+  note: string | null;
+  platform: string | null;
+  track_id: string | null;
   };
 
   const [songs, setSongs] = useState<TrackSong[]>([]);
@@ -51,12 +62,12 @@ export default function TracklistDetailPage() {
   const loadSongs = async () => {
   const { data, error } = await supabase
     .from("tracklist_songs")
-    .select("id,position,title,artist,album,url")
+    .select("id,tracklist_id,position,title,artist,album,url,note, platform, track_id")
     .eq("tracklist_id", id)
     .order("position", { ascending: true });
 
   if (error) {
-    alert(error.message);
+    setPageError("Failed to load songs. Check your connection and try Refresh.");
     return;
   }
   setSongs((data ?? []) as TrackSong[]);
@@ -73,7 +84,7 @@ useEffect(() => {
       .single();
 
     if (error) {
-      alert(error.message);
+      setPageError("Failed to load songs. Check your connection and try Refresh.");
       router.replace("/tracklists");
       return;
     }
@@ -85,12 +96,12 @@ useEffect(() => {
 
     const { data: songData, error: songError } = await supabase
       .from("tracklist_songs")
-      .select("id,position,title,artist,album,url")
+      .select("id,tracklist_id,position,title,artist,album,url,note,platform,track_id")
       .eq("tracklist_id", id)
       .order("position", { ascending: true });
 
     if (songError) {
-      alert(songError.message);
+      setPageError("Failed to load songs. Check your connection and try Refresh.");
       setSongs([]);
     } else {
       setSongs((songData ?? []) as TrackSong[]);
@@ -146,7 +157,7 @@ const normalizePositions = async (ordered: TrackSong[]) => {
       .eq("id", u.id);
 
     if (error) {
-      alert(error.message);
+      setPageError("Failed to load songs. Check your connection and try Refresh.");;
       return;
     }
   }
@@ -178,11 +189,11 @@ const addSong = async (t: SpotifySearchResult) => {
       url: t.url,
       note: null,
     })
-    .select("id,position,title,artist,album,url")
+    .select("id,tracklist_id,position,title,artist,album,url,note,platform,track_id")
     .single();
 
   if (error) {
-    alert(error.message);
+    setPageError("Failed to load songs. Check your connection and try Refresh.");;
     return;
   }
 
@@ -221,12 +232,13 @@ const addManual = async () => {
       url,
       note: null,
     })
-    .select("id,position,title,artist,album,url")
+    .select("id,tracklist_id,position,title,artist,album,url,note,platform,track_id")
     .single();
 
   setAddingManual(false);
 
-  if (error) return alert(error.message);
+  if (error) return setPageError("Failed to snapshot songs into the mixlist. Please check your connection and try again.");
+;
 
   setSongs((prev) => [...prev, data as TrackSong]);
 
@@ -244,7 +256,7 @@ const removeSong = async (songId: string) => {
 
   const { error } = await supabase.from("tracklist_songs").delete().eq("id", songId);
 
-  if (error) return alert(error.message);
+  if (error) return setPageError("Failed to load songs. Check your connection and try Refresh.");;
 
   setSongs((prev) => prev.filter((s) => s.id !== songId));
   const next = songs.filter((s) => s.id !== songId);
@@ -285,7 +297,7 @@ const moveSong = async (songId: string, direction: "up" | "down") => {
     // Reload from DB to restore truth
     const { data: songData, error: songError } = await supabase
       .from("tracklist_songs")
-      .select("id,position,title,artist,album,url")
+      .select("id,tracklist_id,position,title,artist,album,url,note,platform,track_id")
       .eq("tracklist_id", id)
       .order("position", { ascending: true });
 
@@ -306,11 +318,23 @@ const createMixlist = async () => {
     return alert("Not authenticated.");
   }
 
+  // Try to derive a title from the source tracklist
+  const { data: tl, error: tlErr } = await supabase
+    .from("tracklists")
+    .select("title")
+    .eq("id", id)
+    .single();
+  
+  const mixTitle =
+    (!tlErr && tl?.title?.trim()) ? tl.title.trim() : `Mixlist • ${new Date().toLocaleDateString()}`;
+
+
   // 1) create mixlist row
   const { data: mix, error: mixErr } = await supabase
     .from("mixlists")
     .insert({
       owner_user_id: userId,
+      title: mixTitle,
       source_tracklist_id: id,
       message: mixMsg.trim() || null,
       reveal_mode: mixReveal,
@@ -326,21 +350,28 @@ const createMixlist = async () => {
     return alert(mixErr?.message ?? "Failed to create mixlist.");
   }
 
+
+  const missing = songs.find(s => !s.platform || !s.track_id);
+    if (missing) {
+      setCreatingMix(false);
+      return alert("One or more songs are missing platform/track_id. Reload and try again.");
+    }
+
   // 2) snapshot songs
   const payload = songs
     .slice()
     .sort((a, b) => a.position - b.position)
     .map((s, i) => ({
       mixlist_id: mix.id,
-      position: i,
-      platform: "manual",      // if you have platform stored in TrackSong later, use it
-      track_id: `snap_${s.id}`,// safe placeholder; later use original track_id
+      position: i + 1,
+      platform: s.platform,
+      track_id: s.track_id,
       title: s.title,
       artist: s.artist,
       album: s.album,
       version: null,
       url: s.url,
-      note: null,
+      note: s.note,
     }));
 
   const { error: snapErr } = await supabase.from("mixlist_songs").insert(payload);
@@ -348,7 +379,7 @@ const createMixlist = async () => {
   setCreatingMix(false);
 
   if (snapErr) {
-    alert(snapErr.message);
+    setPageError("Failed to snapshot songs into the mixlist. Please try again.");
     return;
   }
 
@@ -365,168 +396,197 @@ const createMixlist = async () => {
     );
   }
 
-  return (
-    <main className="p-10">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-light tracking-wide">{item?.title}</h1>
-          <p className="mt-1 text-xs tracking-widest text-gray-500">
-            TRACKLIST ID: {id}
-          </p>
-        </div>
-
-        <button
-          onClick={remove}
-          className="text-xs tracking-widest text-gray-400 hover:text-red-300 transition"
-        >
-          DELETE
-        </button>
+return (
+  <main className="p-10">
+    <div className="flex items-center justify-between">
+      <div>
+        <h1 className="text-2xl font-light tracking-wide">{item?.title}</h1>
+        <p className="mt-1 text-xs tracking-widest text-gray-500">
+          TRACKLIST ID: {id}
+        </p>
       </div>
 
-      <div className="mt-10 max-w-xl space-y-4">
-        <div>
-          <label className="block text-xs tracking-widest text-gray-400">
-            TITLE
-          </label>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-          />
-        </div>
+      <button
+        onClick={remove}
+        className="text-xs tracking-widest text-gray-400 hover:text-red-300 transition"
+      >
+        DELETE
+      </button>
+    </div>
 
-        <div>
-          <label className="block text-xs tracking-widest text-gray-400">
-            DESCRIPTION
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-            rows={5}
-          />
-        </div>
+    {!loading && songs.length === 0 && !pageError && (
+      <div className="mt-6">
+        <InlineNotice
+          kind="info"
+          title="No songs yet"
+          message="Add songs from Spotify or manually to start shaping the tracklist."
+        />
+      </div>
+    )}
 
-        <div className="flex items-center gap-4">
-          <button
-            onClick={save}
-            disabled={saving}
-            className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-purple-200 hover:bg-purple-500/20 transition disabled:opacity-50"
-          >
-            {saving ? "SAVING…" : "SAVE"}
-          </button>
-
-          <Link
-            href="/tracklists"
-            className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
-          >
-            ← BACK
-          </Link>
-        </div>
+    <div className="mt-10 max-w-xl space-y-4">
+      <div>
+        <label className="block text-xs tracking-widest text-gray-400">
+          TITLE
+        </label>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+        />
       </div>
 
-      <div className="mt-14 border-t border-white/10 pt-10">
-  <h2 className="text-lg font-light tracking-wide">Songs</h2>
-
-  <SpotifySearch onAdd={addSong} />
-<div className="mt-8 max-w-xl rounded-2xl border border-white/10 bg-white/5 p-5">
-  <p className="text-xs tracking-widest text-gray-400">MANUAL ADD</p>
-
-  <div className="mt-4 grid gap-3">
-    <input
-      value={mTitle}
-      onChange={(e) => setMTitle(e.target.value)}
-      className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-      placeholder="Song title"
-    />
-
-    <input
-      value={mArtist}
-      onChange={(e) => setMArtist(e.target.value)}
-      className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-      placeholder="Artist"
-    />
-
-    <input
-      value={mAlbum}
-      onChange={(e) => setMAlbum(e.target.value)}
-      className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-      placeholder="Album (optional)"
-    />
-
-    <input
-      value={mUrl}
-      onChange={(e) => setMUrl(e.target.value)}
-      className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-      placeholder="Link (Spotify / YouTube / Apple Music / etc.)"
-    />
-
-    <button
-      onClick={addManual}
-      disabled={addingManual}
-      className="mt-2 w-fit rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-purple-200 hover:bg-purple-500/20 transition disabled:opacity-50"
-    >
-      {addingManual ? "ADDING…" : "ADD SONG"}
-    </button>
-  </div>
-</div>
-
-  <div className="mt-8 space-y-2">
-    {songs.length === 0 ? (
-      <p className="text-sm text-gray-400">No songs yet. Add one above.</p>
-    ) : (
-      songs.map((s) => (
-      <div
-          key={s.id}
-          className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
-        >
-          <a
-            href={s.url}
-            target="_blank"
-            rel="noreferrer"
-            className="min-w-0 flex-1 hover:text-purple-200 transition"
-          >
-            <p className="truncate text-sm text-gray-100">
-              {s.position + 1}. {s.title}
-            </p>
-            <p className="truncate text-xs text-gray-400">
-              {s.artist}
-              {s.album ? ` • ${s.album}` : ""}
-            </p>
-          </a>
-
-        <div className="flex items-center gap-3 flex-shrink-0">
-          <button
-            onClick={() => moveSong(s.id, "up")}
-            className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
-            title="Move up"
-          >
-            ↑
-          </button>
-
-          <button
-            onClick={() => moveSong(s.id, "down")}
-            className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
-            title="Move down"
-          >
-            ↓
-          </button>
-
-          <button
-            onClick={() => removeSong(s.id)}
-            className="text-xs tracking-widest text-gray-400 hover:text-red-300 transition"
-          >
-            REMOVE
-          </button>
-        </div>
-
-        </div>
-
-       ))
+      {pageError && (
+        <InlineNotice
+          kind="error"
+          title="Something went wrong"
+          message={pageError}
+        />
       )}
+
+      {pageInfo && <InlineNotice kind="info" message={pageInfo} />}
+
+      <div>
+        <label className="block text-xs tracking-widest text-gray-400">
+          DESCRIPTION
+        </label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+          rows={5}
+        />
+      </div>
+
+      <div className="flex items-center gap-4">
+        <button
+          onClick={save}
+          disabled={saving}
+          className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-purple-200 hover:bg-purple-500/20 transition disabled:opacity-50"
+        >
+          {saving ? "SAVING…" : "SAVE"}
+        </button>
+
+        <Link
+          href="/tracklists"
+          className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
+        >
+          ← BACK
+        </Link>
+      </div>
+    </div>
+
+    <h2 className="mt-12 text-lg font-light tracking-wide">Songs</h2>
+
+    <div className="mt-4">
+      <SpotifySearch onAdd={addSong} />
+    </div>
+
+    {DEV_MANUAL_ADD && (
+      <div className="mt-4 border border-yellow-500/30 bg-yellow-500/10 p-3 rounded-lg">
+        <div className="text-xs text-yellow-300 tracking-widest mb-2">
+          DEV ONLY
+        </div>
+
+        <div className="max-w-xl rounded-2xl border border-white/10 bg-white/5 p-5">
+          <p className="text-xs tracking-widest text-gray-400">MANUAL ADD</p>
+
+          <div className="mt-4 grid gap-3">
+            <input
+              value={mTitle}
+              onChange={(e) => setMTitle(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+              placeholder="Song title"
+            />
+
+            <input
+              value={mArtist}
+              onChange={(e) => setMArtist(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+              placeholder="Artist"
+            />
+
+            <input
+              value={mAlbum}
+              onChange={(e) => setMAlbum(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+              placeholder="Album (optional)"
+            />
+
+            <input
+              value={mUrl}
+              onChange={(e) => setMUrl(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+              placeholder="Link (Spotify / YouTube / Apple Music / etc.)"
+            />
+
+            <button
+              onClick={addManual}
+              disabled={addingManual}
+              className="mt-2 w-fit rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-purple-200 hover:bg-purple-500/20 transition disabled:opacity-50"
+            >
+              {addingManual ? "ADDING…" : "ADD SONG"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    <div className="mt-8 space-y-2">
+      {songs.length === 0 ? (
+        <p className="text-sm text-gray-400">No songs yet. Add one above.</p>
+      ) : (
+        songs.map((s) => (
+          <div
+            key={s.id}
+            className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+          >
+            <a
+              href={s.url}
+              target="_blank"
+              rel="noreferrer"
+              className="min-w-0 flex-1 hover:text-purple-200 transition"
+            >
+              <p className="truncate text-sm text-gray-100">
+                {s.position + 1}. {s.title}
+              </p>
+              <p className="truncate text-xs text-gray-400">
+                {s.artist}
+                {s.album ? ` • ${s.album}` : ""}
+              </p>
+            </a>
+
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <button
+                onClick={() => moveSong(s.id, "up")}
+                className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
+                title="Move up"
+              >
+                ↑
+              </button>
+
+              <button
+                onClick={() => moveSong(s.id, "down")}
+                className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
+                title="Move down"
+              >
+                ↓
+              </button>
+
+              <button
+                onClick={() => removeSong(s.id)}
+                className="text-xs tracking-widest text-gray-400 hover:text-red-300 transition"
+              >
+                REMOVE
+              </button>
+            </div>
+          </div>
+        ))
+      )}
+
       <div className="mt-10 max-w-xl rounded-2xl border border-white/10 bg-white/5 p-5">
         <p className="text-xs tracking-widest text-gray-400">CREATE MIXLIST</p>
-          
+
         <textarea
           value={mixMsg}
           onChange={(e) => setMixMsg(e.target.value)}
@@ -534,15 +594,15 @@ const createMixlist = async () => {
           rows={4}
           placeholder="Optional message/context for the person receiving this…"
         />
-        <textarea
-           value={mixFinish}
-           onChange={(e) => setMixFinish(e.target.value)}
-           className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-           rows={4}
-           placeholder="Finishing note (only shown at the end)…"
-/>
 
-      
+        <textarea
+          value={mixFinish}
+          onChange={(e) => setMixFinish(e.target.value)}
+          className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+          rows={4}
+          placeholder="Finishing note (only shown at the end)…"
+        />
+
         <label className="mt-4 flex items-center gap-3 text-xs tracking-widest text-gray-400">
           <input
             type="checkbox"
@@ -551,7 +611,7 @@ const createMixlist = async () => {
           />
           REVEAL MODE (ONE AT A TIME)
         </label>
-          
+
         <button
           onClick={createMixlist}
           disabled={creatingMix}
@@ -561,7 +621,5 @@ const createMixlist = async () => {
         </button>
       </div>
     </div>
-  </div>
-</main>
-  );
-}
+  </main>
+)};
