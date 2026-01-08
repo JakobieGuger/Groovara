@@ -4,16 +4,20 @@ import { supabase } from "../../lib/supabaseClient";
 
 export default function LoginPage() {
   const signInWithGoogle = async () => {
+    const siteUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      (typeof window !== "undefined" ? window.location.origin : "");
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/tracklists`,
+        redirectTo: `${siteUrl}/tracklists`,
       },
     });
 
     if (error) alert(error.message);
   };
-
+  
   return (
     <main className="min-h-screen bg-[#0b0a0f] text-gray-200 flex items-center justify-center p-6">
       <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
