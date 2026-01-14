@@ -4,11 +4,9 @@ import { useEffect, useState} from "react";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabaseClient";
 import { useParams, useRouter } from "next/navigation";
-import { SpotifySearch, type SpotifySearchResult } from "../../../lib/SpotifySearch";
+import UnifiedSearch, { UnifiedSearchResult } from "../../../lib/UnifiedSearch";
 import InlineNotice from "../../../lib/InlineNotice";
-
-
-
+import Image from "next/image";
 
 type Tracklist = {
   id: string;
@@ -58,6 +56,13 @@ export default function TracklistDetailPage() {
   };
 
   const [songs, setSongs] = useState<TrackSong[]>([]);
+
+    const PLATFORM_ICONS: Record<string, string> = {
+    spotify: "/icons/spotify.png",
+    youtube: "/icons/youtube.png",
+    apple: "/icons/apple.png",
+  };
+
 
   const loadSongs = async () => {
   const { data, error } = await supabase
@@ -171,7 +176,7 @@ const normalizePositions = async (ordered: TrackSong[]) => {
 };
 
 
-const addSong = async (t: SpotifySearchResult) => {
+const addSong = async (t: UnifiedSearchResult) => {
   const nextPos =
     songs.length === 0 ? 0 : Math.max(...songs.map((s) => s.position)) + 1;
 
@@ -180,8 +185,8 @@ const addSong = async (t: SpotifySearchResult) => {
     .insert({
       tracklist_id: id,
       position: nextPos,
-      platform: "spotify",
-      track_id: t.id,
+      platform: t.platform,
+      track_id: t.track_id,
       title: t.title,
       artist: t.artist,
       album: t.album || null,
@@ -193,7 +198,7 @@ const addSong = async (t: SpotifySearchResult) => {
     .single();
 
   if (error) {
-    setPageError("Failed to load songs. Check your connection and try Refresh.");;
+    setPageError("Failed to add songs. Check your connection and try again.");;
     return;
   }
 
@@ -479,7 +484,7 @@ return (
     <h2 className="mt-12 text-lg font-light tracking-wide">Songs</h2>
 
     <div className="mt-4">
-      <SpotifySearch onAdd={addSong} />
+      <UnifiedSearch onAdd={addSong} />
     </div>
 
     {DEV_MANUAL_ADD && (
@@ -547,9 +552,23 @@ return (
               rel="noreferrer"
               className="min-w-0 flex-1 hover:text-purple-200 transition"
             >
-              <p className="truncate text-sm text-gray-100">
-                {s.position + 1}. {s.title}
-              </p>
+          
+              <div className="flex items-center gap-2 min-w-0">
+            {s.platform && (
+              <Image
+                src={PLATFORM_ICONS[s.platform]}
+                alt={s.platform}
+                width={16}
+                height={16}
+                className="opacity-80 flex-shrink-0"
+              />
+            )}
+
+                <p className="truncate text-sm text-gray-100">
+                  {s.position + 1}. {s.title}
+                </p>
+              </div>
+
               <p className="truncate text-xs text-gray-400">
                 {s.artist}
                 {s.album ? ` • ${s.album}` : ""}

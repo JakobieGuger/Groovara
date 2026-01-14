@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import LogoutButton from "./Logout";
 
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION;
+
 type MenuItem =
   | { type: "link"; label: string; href: string }
   | { type: "divider" }
@@ -57,6 +59,13 @@ export default function AppNav() {
             </span>
             <span className="text-white/60 text-xs">▾</span>
           </button>
+
+          {APP_VERSION && (
+            <div className="px-3 py-2 text-[10px] tracking-widest text-gray-500 select-none">
+              {APP_VERSION}
+            </div>
+          )}
+
 
           {open && (
             <div

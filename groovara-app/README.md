@@ -1,36 +1,176 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Groovara
 
-## Getting Started
+Private Alpha v1
 
-First, run the development server:
+Groovara is a music sharing app built around intentional listening.
+Instead of sending someone a playlist they skim once and forget, Groovara lets you curate a listening experience—one song at a time, in order, with context.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+This project is currently in private alpha. Core functionality works, but features are still being expanded and refined.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+What Groovara Is (Conceptually)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Tracklists are your workspace
+You build and edit these freely.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Mixlists are the finished artifact
+A snapshot of a tracklist, frozen in time and meant to be shared.
 
-## Learn More
+Nothing mutates after sharing
+Once a mixlist is created, it never changes—even if the original tracklist does.
 
-To learn more about Next.js, take a look at the following resources:
+Listening is intentional
+Optional reveal mode prevents skipping ahead and encourages full attention.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Current Features (Alpha v1)
+Authentication
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Google OAuth via Supabase
 
-## Deploy on Vercel
+Secure, user-specific data access
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Works across devices
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Tracklists (Authoring)
+
+Create, edit, and delete tracklists
+
+Add songs via Spotify search
+
+Reorder songs
+
+Edit tracklist title and description
+
+All changes are live-editable until shared
+
+Mixlists (Sharing)
+
+Create a mixlist as a snapshot of a tracklist
+
+Optional message (context for the listener)
+
+Optional finishing note (revealed at the end)
+
+Optional Reveal Mode (songs unlock one at a time)
+
+Mixlists are immutable after creation
+
+Reveal Mode
+
+Songs are hidden until revealed
+
+Encourages sequential, focused listening
+
+Designed for gifting, storytelling, or emotional pacing
+
+Sharing
+
+Shareable link for each mixlist
+
+One-click Copy Link button
+
+Mixlists are readable by authenticated users
+
+My Mixlists Page
+
+View all mixlists you’ve created
+
+See title, description, and creation time
+
+Open or delete past mixlists
+
+UX & Stability
+
+Consistent global navigation
+
+Clear empty states (no tracklists, no songs, etc.)
+
+Inline error handling (no broken-feeling alerts)
+
+Manual song entry is disabled in alpha (dev-only)
+
+What This Alpha Does Not Yet Include
+
+(These are intentional omissions, not bugs.)
+
+YouTube or Apple Music search
+
+Manual song entry for users
+
+Reveal progress persistence after refresh
+
+Public browsing or discovery
+
+Analytics or usage tracking
+
+Monetization
+
+Mobile optimization pass
+
+Onboarding/tutorial flow
+
+Planned Features (Near-Term Roadmap)
+
+These are planned for the next few updates, moving toward Beta.
+
+Search & Platform Expansion
+
+YouTube song search
+
+Apple Music song search
+
+Unified multi-platform search results
+
+Reveal Improvements
+
+Persist reveal progress across refreshes
+
+Better feedback during reveal mode
+
+Optional listener controls (replay, review)
+
+Manual Add (User-Facing)
+
+Re-enabled with:
+
+Platform selector
+
+URL validation
+
+Proper metadata handling
+
+Intended as a fallback, not the primary flow
+
+UX Polish
+
+Clear onboarding explanation for first-time users
+
+Better copy explaining Tracklists vs Mixlists
+
+Minor layout refinements
+
+Mobile usability improvements
+
+Stability & Feedback
+
+Improved logging for edge cases
+
+Better handling of rare network failures
+
+Private user feedback loop during alpha/beta
+
+Technology Stack (for the curious)
+
+Frontend: Next.js (App Router), React, Tailwind CSS
+
+Auth & Database: Supabase
+
+Music Data: Spotify Web API
+
+Hosting: Vercel
+
+Status
+
+Groovara Alpha v1 — Live
+
+This alpha proves the core idea works.
+The focus now is expanding platform support, improving the listening experience, and polishing the product into a feature-complete beta.
