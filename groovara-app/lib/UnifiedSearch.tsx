@@ -141,12 +141,12 @@ export default function UnifiedSearch({
             platform === "spotify"
               ? "Search Spotify… (song, artist, album)"
               : platform === "apple"
-              ? "Search Apple Music… (coming soon)"
-              : "Search YouTube… (coming soon)"
+              ? "Search Apple Music… (song, artist, album)"
+              : "Search YouTube… (song, artist, album)"
           }
         />
       </div>
-
+          
       {loading && <p className="mt-3 text-sm text-gray-400">Searching…</p>}
       {err && <p className="mt-3 text-sm text-red-300">{err}</p>}
 
@@ -174,7 +174,15 @@ export default function UnifiedSearch({
             </div>
 
             <button
-              onClick={() => onAdd(r)}
+              onClick={async () => {
+              try {
+                await onAdd(r);
+              } finally{
+                setQ("");
+                setResults([]);
+                setErr(null);
+              }
+              }}
               className="rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-[10px] tracking-widest text-purple-200 hover:bg-purple-500/20 transition flex-shrink-0"
             >
               ADD

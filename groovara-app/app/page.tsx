@@ -1,13 +1,40 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabaseClient";
 
 export default function Home() {
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const init = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      setLoggedIn(!!data.session);
+    };
+
+    void init();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setLoggedIn(!!session);
+    });
+
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
   return (
     <main className="min-h-screen bg-[#0b0a0f] text-gray-200">
       {/* Hero */}
       <section
         className="relative h-[65vh] bg-cover bg-center"
         style={{
-          backgroundImage: "url('/GV_HomepageImage.jpg')",
+          backgroundImage: "url('/gv_HomepageImage.jpg')",
         }}
       >
         <div className="absolute inset-0 bg-black/55" />
@@ -17,30 +44,31 @@ export default function Home() {
             <p className="mb-6 text-xs tracking-[0.4em] text-purple-400">
               NOT A MIXTAPE. NOT A PLAYLIST.
             </p>
-              
+
             <h2 className="text-2xl md:text-3xl font-light tracking-wide text-gray-100">
               Something new is coming.
             </h2>
-              
+
             {/* Entry buttons */}
             <div className="mt-10 flex items-center justify-center gap-4">
-              <Link
-                href="/login"
-                className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-purple-200 hover:bg-purple-500/20 transition"
-              >
-                LOGIN
-              </Link>
-              
+              {!loggedIn ? (
+                <Link
+                  href="/login"
+                  className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-purple-200 hover:bg-purple-500/20 transition"
+                >
+                  LOGIN
+                </Link>
+              ) : null}
+
               <Link
                 href="/tracklists"
                 className="rounded-full border border-gray-500/30 bg-white/5 px-6 py-3 text-xs tracking-widest text-gray-200 hover:bg-white/10 transition"
               >
-                OPEN APP
+                ENTER GROOVARA
               </Link>
             </div>
           </div>
         </div>
-
       </section>
 
       {/* Message */}
@@ -60,5 +88,3 @@ export default function Home() {
     </main>
   );
 }
-
-//Homepage: Each user will have unique homepage that has a tracklist box and a mixlist box. Tracklists will have markers that indicate completion status (in progress or complete). 
