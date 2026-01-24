@@ -34,7 +34,7 @@ export default function Home() {
       <section
         className="relative h-[65vh] bg-cover bg-center"
         style={{
-          backgroundImage: "url('/gv_HomepageImage.jpg')",
+          backgroundImage: "url('/gv_HomepageImage.JPG')",
         }}
       >
         <div className="absolute inset-0 bg-black/55" />
