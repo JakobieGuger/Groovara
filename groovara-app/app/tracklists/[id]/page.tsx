@@ -727,14 +727,13 @@ export default function TracklistDetailPage() {
           {multiNoteMode ? "EXIT MULTI-NOTE" : "MULTI-NOTE MODE"}
         </button>
       </div>
-      
       <button
         onClick={async () => {
           try {
-            const res = await fetch("/api/spotify/export-tracklist", {
+            const res = await fetch("/api/spotify/export", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ Tracklist: id }),
+              body: JSON.stringify({ tracklistId: id }),
             });
           
             const data: {
@@ -762,8 +761,6 @@ export default function TracklistDetailPage() {
       >
         Export to Spotify
       </button>
-
-
       {multiNoteMode ? (
         <div className="mt-4 max-w-xl rounded-2xl border border-white/10 bg-white/5 p-5">
           <div className="flex items-start justify-between gap-4">
