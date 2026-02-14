@@ -276,8 +276,11 @@ export default function SettingsPage() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => {
-                      window.location.href = "/api/spotify/login";
+                    onClick={async () => {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      window.location.href = session?.access_token
+                        ? `/api/spotify/login?token=${session.access_token}`
+                        : "/login";
                     }}
                     className="mt-4 rounded-full border border-green-500/30 bg-green-500/10 px-6 py-3 text-xs tracking-widest text-green-200 hover:bg-green-500/20 transition"
                   >
