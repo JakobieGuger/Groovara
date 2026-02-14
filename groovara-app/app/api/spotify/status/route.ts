@@ -15,6 +15,12 @@ function extractBearer(req: NextRequest): string | null {
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();
 
+  // ✅ stamp: proves which code is deployed + whether auth header is reaching the server
+  const stamp = {
+    stamp: "status-route-2026-02-13-B",
+    hasAuthHeader: Boolean(req.headers.get("authorization")),
+  };
+
   let supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -59,7 +65,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  if (!user) return NextResponse.json({ connected: false });
+  if (!user) return NextResponse.json({ connected: false, ...stamp });
 
   const { data, error } = await supabase
     .from("user_spotify_accounts")
@@ -67,7 +73,7 @@ export async function GET(req: NextRequest) {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (error || !data) return NextResponse.json({ connected: false });
+  if (error || !data) return NextResponse.json({ connected: false, ...stamp });
 
-  return NextResponse.json({ connected: true, profile: data });
+  return NextResponse.json({ connected: true, profile: data, ...stamp });
 }
