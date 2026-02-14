@@ -727,15 +727,25 @@ export default function TracklistDetailPage() {
           {multiNoteMode ? "EXIT MULTI-NOTE" : "MULTI-NOTE MODE"}
         </button>
       </div>
+
       <button
         onClick={async () => {
           try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const supaToken = session?.access_token;
+
+
             const res = await fetch("/api/spotify/export", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                ...(session?.access_token
+                  ? { Authorization: `Bearer ${session.access_token}` }
+                  : {}),
+              },
               body: JSON.stringify({ tracklistId: id }),
             });
-          
+
             const data: {
               success?: boolean;
               playlistUrl?: string | null;

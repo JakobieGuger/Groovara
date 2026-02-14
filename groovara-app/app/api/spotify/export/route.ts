@@ -38,13 +38,27 @@ export async function POST(req: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+    // Try cookie-auth first
+    let {
+      data: { user },
+    } = await supabase.auth.getUser();
+    
+    // Fallback: Bearer token from client (because your session is in localStorage)
+    if (!user) {
+      const authHeader = req.headers.get("authorization") ?? "";
+      const token = authHeader.startsWith("Bearer ")
+        ? authHeader.slice("Bearer ".length).trim()
+        : null;
+    
+      if (token) {
+        const res = await supabase.auth.getUser(token);
+        user = res.data.user ?? null;
+      }
+    }
+    
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
 
   const body = (await req.json()) as ExportBody;
   if (!body?.tracklistId) {
