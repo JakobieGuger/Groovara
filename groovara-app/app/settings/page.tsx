@@ -33,16 +33,25 @@ export default function SettingsPage() {
 
 
   useEffect(() => {
-      fetch("/api/spotify/status")
-      .then((res) => res.json())
-      .then((data) => {
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+      
+        const res = await fetch("/api/spotify/status", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          cache: "no-store",
+        });
+      
+        const data = await res.json();
         setConnected(Boolean(data.connected));
         setSpotifyProfile(data.profile ?? null);
-      })
-      .catch(() => {
+      } catch {
         setConnected(false);
         setSpotifyProfile(null);
-      });
+      }
+    })();
+
     
     const run = async () => {
       setLoading(true);
@@ -105,7 +114,7 @@ export default function SettingsPage() {
       setLoading(false);
     };
 
-    void run();
+    run();
   }, []);
 
   const save = async () => {
