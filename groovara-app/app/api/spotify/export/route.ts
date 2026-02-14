@@ -21,7 +21,7 @@ function toSpotifyUri(trackId: string): string {
 
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
-  const supabase = createServerClient(
+  let supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -39,22 +39,46 @@ export async function POST(req: NextRequest) {
   );
 
     // Try cookie-auth first
-    let {
-      data: { user },
-    } = await supabase.auth.getUser();
+let {
+  data: { user },
+} = await supabase.auth.getUser();
 
-    // Fallback: Bearer token from client (because your session is in localStorage)
-    if (!user) {
-      const authHeader = req.headers.get("authorization") ?? "";
-      const token = authHeader.startsWith("Bearer ")
-        ? authHeader.slice("Bearer ".length).trim()
-        : null;
+if (!user) {
+  const authHeader = req.headers.get("authorization") ?? "";
+  const token = authHeader.startsWith("Bearer ")
+    ? authHeader.slice("Bearer ".length).trim()
+    : null;
 
-      if (token) {
-        const res = await supabase.auth.getUser(token);
-        user = res.data.user ?? null;
-      }
+  if (token) {
+    const authRes = await supabase.auth.getUser(token);
+    user = authRes.data.user ?? null;
+
+    if (user) {
+        supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            getAll() {
+              return [];
+            },
+            setAll() {},
+          },
+          global: {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        }
+      );
     }
+  }
+}
+
+if (!user) {
+  return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+}
+
 
     if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -76,11 +100,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Tracklist not found" }, { status: 404 });
   }
 
-  /* Ownership guard
+  // Ownership guard
   if (tracklist.user_id !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  */
+  
   const { data: songs, error: sErr } = await supabase
     .from("tracklist_songs")
     .select("platform,track_id,position,title,artist")
