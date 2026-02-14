@@ -743,7 +743,7 @@ export default function TracklistDetailPage() {
                   ? { Authorization: `Bearer ${session.access_token}` }
                   : {}),
               },
-              body: JSON.stringify({ tracklistId: id }),
+              body: JSON.stringify({ tracklistId: String(id) }),
             });
 
             const data: {

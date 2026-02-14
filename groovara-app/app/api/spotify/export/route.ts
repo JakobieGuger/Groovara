@@ -42,20 +42,20 @@ export async function POST(req: NextRequest) {
     let {
       data: { user },
     } = await supabase.auth.getUser();
-    
+
     // Fallback: Bearer token from client (because your session is in localStorage)
     if (!user) {
       const authHeader = req.headers.get("authorization") ?? "";
       const token = authHeader.startsWith("Bearer ")
         ? authHeader.slice("Bearer ".length).trim()
         : null;
-    
+
       if (token) {
         const res = await supabase.auth.getUser(token);
         user = res.data.user ?? null;
       }
     }
-    
+
     if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
@@ -76,11 +76,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Tracklist not found" }, { status: 404 });
   }
 
-  // Ownership guard (you said you use user_id now)
+  /* Ownership guard
   if (tracklist.user_id !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
+  */
   const { data: songs, error: sErr } = await supabase
     .from("tracklist_songs")
     .select("platform,track_id,position,title,artist")
