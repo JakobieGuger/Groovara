@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-
+export const runtime = "nodejs";
 
 type SpotifyTokenResponse = {
   access_token: string;
@@ -12,22 +12,27 @@ type SpotifyTokenResponse = {
   refresh_token?: string;
 };
 
-export const runtime = "nodejs";
+type SpotifyMe = {
+  id: string;
+  display_name?: string;
+  external_urls?: { spotify?: string };
+  images?: { url: string }[];
+};
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
 
-  // No code? user hit URL manually or Spotify didn't send it
   if (!code) {
     return NextResponse.redirect(
       new URL("/settings?error=no_code", process.env.NEXT_PUBLIC_SITE_URL)
     );
   }
 
-  // Supabase server client WITH cookies (this is the critical part)
   const cookieStore = await cookies();
-  const supabase = createServerClient(
+
+  // Start with cookie-aware client
+  let supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -44,13 +49,46 @@ export async function GET(req: NextRequest) {
     }
   );
 
-  const {
+  // 1) Try cookie-auth first
+  let {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // If you're not logged in on groovara.com, callback can't store tokens → sends to login
+  // 2) Fallback: read the token bridge cookie set during /api/spotify/login
   if (!user) {
-    return NextResponse.redirect(new URL("/login", process.env.NEXT_PUBLIC_SITE_URL));
+    const token = cookieStore.get("gv_spotify_supa_token")?.value?.trim() || null;
+
+    if (token) {
+      const authRes = await supabase.auth.getUser(token);
+      user = authRes.data.user ?? null;
+
+      if (user) {
+        // Rebuild with bearer token so RLS works for DB writes
+        supabase = createServerClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          {
+            cookies: {
+              getAll() {
+                return [];
+              },
+              setAll() {},
+            },
+            global: {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          }
+        );
+      }
+    }
+  }
+
+  if (!user) {
+    return NextResponse.redirect(
+      new URL("/login", process.env.NEXT_PUBLIC_SITE_URL)
+    );
   }
 
   // Exchange code -> tokens
@@ -85,50 +123,61 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // IMPORTANT: Spotify only returns refresh_token on first approval (or if you force re-consent)
-  // If refresh_token is missing, keep the existing one in DB.
+  // Pull profile (optional but recommended)
+  const meRes = await fetch("https://api.spotify.com/v1/me", {
+    headers: { Authorization: `Bearer ${tokenData.access_token}` },
+  });
+  const me: SpotifyMe | null = meRes.ok ? ((await meRes.json()) as SpotifyMe) : null;
+
   const expires_at = Math.floor(Date.now() / 1000) + tokenData.expires_in;
 
-  // Pull existing row (to preserve refresh_token if Spotify didn't resend it)
+  // Preserve refresh_token if Spotify doesn’t resend it
   const { data: existing } = await supabase
     .from("user_spotify_accounts")
     .select("refresh_token")
     .eq("user_id", user.id)
-    .maybeSingle();
+    .maybeSingle<{ refresh_token: string | null }>();
 
-  const refresh_token = tokenData.refresh_token ?? existing?.refresh_token;
+  const refresh_token = tokenData.refresh_token ?? existing?.refresh_token ?? null;
 
   if (!refresh_token) {
     return NextResponse.redirect(
       new URL("/settings?error=no_refresh_token", process.env.NEXT_PUBLIC_SITE_URL)
     );
   }
-  const meRes = await fetch("https://api.spotify.com/v1/me", {
-    headers: { Authorization: `Bearer ${tokenData.access_token}` },
-  });
-  const me = meRes.ok ? await meRes.json() : null;
 
-
-  const { error: upsertErr } = await supabase.from("user_spotify_accounts").upsert(
-    {
-      user_id: user.id,
-      access_token: tokenData.access_token,
-      refresh_token,
-      expires_at,
-      scope: tokenData.scope ?? null,
-      spotify_user_id: me?.id ?? null,
-      display_name: me?.display_name ?? null,
-      profile_url: me?.external_urls?.spotify ?? null,
-      image_url: me?.images?.[0]?.url ?? null,
-    },
-    { onConflict: "user_id" }
-  );
+  const { error: upsertErr } = await supabase
+    .from("user_spotify_accounts")
+    .upsert(
+      {
+        user_id: user.id,
+        access_token: tokenData.access_token,
+        refresh_token,
+        expires_at,
+        scope: tokenData.scope ?? null,
+        spotify_user_id: me?.id ?? null,
+        display_name: me?.display_name ?? null,
+        profile_url: me?.external_urls?.spotify ?? null,
+        image_url: me?.images?.[0]?.url ?? null,
+      },
+      { onConflict: "user_id" }
+    );
 
   if (upsertErr) {
+    console.error("UPSERT ERROR:", upsertErr);
     return NextResponse.redirect(
       new URL("/settings?error=db_upsert_failed", process.env.NEXT_PUBLIC_SITE_URL)
     );
   }
+
+  // Clear the bridge token cookie (no reason to keep it)
+  cookieStore.set("gv_spotify_supa_token", "", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
 
   return NextResponse.redirect(
     new URL("/settings?connected=spotify", process.env.NEXT_PUBLIC_SITE_URL)

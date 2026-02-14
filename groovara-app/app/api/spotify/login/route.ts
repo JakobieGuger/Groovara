@@ -15,8 +15,13 @@ function extractBearer(req: NextRequest): string | null {
 
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();
+  const url = new URL(req.url);
 
-  // Start with cookie-aware client (works if you *do* have cookies)
+  const tokenFromQuery = url.searchParams.get("token")?.trim() || null;
+  const tokenFromHeader = extractBearer(req);
+  const token = tokenFromQuery ?? tokenFromHeader;
+
+  // cookie-aware client (works if your app ever has auth cookies)
   let supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -34,42 +39,44 @@ export async function GET(req: NextRequest) {
     }
   );
 
-  // 1) Try cookies first
+  // Try cookie-auth first
   let {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // 2) Fallback to token passed from client (localStorage session)
-  if (!user) {
-    const url = new URL(req.url);
-    const tokenFromQuery = url.searchParams.get("token");
-    const tokenFromHeader = extractBearer(req);
-    const token = (tokenFromQuery ?? tokenFromHeader)?.trim() || null;
+  // Fallback to provided token (localStorage session)
+  if (!user && token) {
+    const authRes = await supabase.auth.getUser(token);
+    user = authRes.data.user ?? null;
 
-    if (token) {
-      const authRes = await supabase.auth.getUser(token);
-      user = authRes.data.user ?? null;
+    if (user) {
+      // rebuild client with bearer token (RLS context)
+      supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            getAll() {
+              return [];
+            },
+            setAll() {},
+          },
+          global: {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        }
+      );
 
-      if (user) {
-        // Rebuild client WITH token so RLS context works if needed later
-        supabase = createServerClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          {
-            cookies: {
-              getAll() {
-                return [];
-              },
-              setAll() {},
-            },
-            global: {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            },
-          }
-        );
-      }
+      // Store token temporarily so callback can see the user
+      cookieStore.set("gv_spotify_supa_token", token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 10, // 10 minutes
+      });
     }
   }
 
