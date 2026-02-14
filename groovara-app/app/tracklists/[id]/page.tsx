@@ -727,6 +727,42 @@ export default function TracklistDetailPage() {
           {multiNoteMode ? "EXIT MULTI-NOTE" : "MULTI-NOTE MODE"}
         </button>
       </div>
+      
+      <button
+        onClick={async () => {
+          try {
+            const res = await fetch("/api/spotify/export-tracklist", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ Tracklist: id }),
+            });
+          
+            const data: {
+              success?: boolean;
+              playlistUrl?: string | null;
+              exportedCount?: number;
+              error?: string;
+            } = await res.json();
+          
+            if (!res.ok) {
+              alert(data.error ?? "Export failed");
+              return;
+            }
+          
+            if (data.playlistUrl) {
+              window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
+            } else {
+              alert(`Exported ${data.exportedCount ?? 0} tracks. (No URL returned)`);
+            }
+          } catch {
+            alert("Export failed");
+          }
+        }}
+        className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-500"
+      >
+        Export to Spotify
+      </button>
+
 
       {multiNoteMode ? (
         <div className="mt-4 max-w-xl rounded-2xl border border-white/10 bg-white/5 p-5">

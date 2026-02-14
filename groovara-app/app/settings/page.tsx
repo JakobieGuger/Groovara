@@ -11,6 +11,14 @@ type UserSettings = {
   default_is_public: boolean;
 };
 
+type SpotifyProfile = {
+  spotify_user_id: string | null;
+  display_name: string | null;
+  profile_url: string | null;
+  image_url: string | null;
+};
+
+
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -20,8 +28,21 @@ export default function SettingsPage() {
 
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [connected, setConnected] = useState<boolean | null>(null);
+  const [spotifyProfile, setSpotifyProfile] = useState<SpotifyProfile | null>(null);
+
 
   useEffect(() => {
+      fetch("/api/spotify/status")
+      .then((res) => res.json())
+      .then((data) => {
+        setConnected(Boolean(data.connected));
+        setSpotifyProfile(data.profile ?? null);
+      })
+      .catch(() => {
+        setConnected(false);
+        setSpotifyProfile(null);
+      });
     const run = async () => {
       setLoading(true);
       setErr(null);
@@ -197,7 +218,6 @@ export default function SettingsPage() {
                   New mixlists are accessible by link.
                 </p>
               </div>
-
               <input
                 type="checkbox"
                 checked={settings.default_is_public}
@@ -209,7 +229,6 @@ export default function SettingsPage() {
                 className="h-5 w-5 accent-purple-500"
               />
             </label>
-
             <button
               onClick={save}
               disabled={saving}
@@ -217,6 +236,55 @@ export default function SettingsPage() {
             >
               {saving ? "SAVING…" : "SAVE"}
             </button>
+              <div className="h-px bg-white/10" />         
+              <div className="pt-2">
+                <p className="text-xs tracking-widest text-gray-400">SPOTIFY</p>
+                {connected === null ? (
+                  <p className="mt-3 text-sm text-white/60">Checking connection…</p>
+                ) : connected ? (
+                  <div className="mt-4 rounded-2xl border border-green-500/30 bg-green-500/10 p-5">
+                    <div className="flex items-center gap-3">
+                      {spotifyProfile?.image_url ? (
+                        <img
+                          src={spotifyProfile.image_url}
+                          alt=""
+                          className="h-10 w-10 rounded-full object-cover"
+                        />
+                      ) : null}
+                      <div>
+                        <p className="text-sm text-green-300">✓ Spotify connected</p>
+                        <p className="mt-1 text-xs tracking-widest text-gray-400">
+                          {spotifyProfile?.display_name
+                            ? `CONNECTED AS ${spotifyProfile.display_name.toUpperCase()}`
+                            : "CONNECTED"}
+                        </p>
+                      </div>
+                    </div>
+                          
+                    <button
+                      onClick={async () => {
+                        const res = await fetch("/api/spotify/disconnect", { method: "POST" });
+                        if (res.ok) {
+                          setConnected(false);
+                          setSpotifyProfile(null);
+                        }
+                      }}
+                      className="mt-4 rounded-full border border-red-500/30 bg-red-500/10 px-6 py-3 text-xs tracking-widest text-red-200 hover:bg-red-500/20 transition"
+                    >
+                      DISCONNECT
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      window.location.href = "/api/spotify/login";
+                    }}
+                    className="mt-4 rounded-full border border-green-500/30 bg-green-500/10 px-6 py-3 text-xs tracking-widest text-green-200 hover:bg-green-500/20 transition"
+                  >
+                    CONNECT SPOTIFY
+                  </button>
+                )}
+              </div>
           </div>
         ) : null}
       </div>

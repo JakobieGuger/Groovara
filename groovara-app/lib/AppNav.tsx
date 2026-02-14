@@ -16,7 +16,7 @@ export default function AppNav() {
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
   const items: MenuItem[] = [
-    { type: "link", label: "Home", href: "/" },
+    { type: "link", label: "Home", href: "/hub" },
     { type: "link", label: "My Tracklists", href: "/tracklists" },
     { type: "link", label: "My Mixlists", href: "/mixlists" }, // add later
     { type: "divider" },
