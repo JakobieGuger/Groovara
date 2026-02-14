@@ -43,6 +43,7 @@ export default function SettingsPage() {
         setConnected(false);
         setSpotifyProfile(null);
       });
+    
     const run = async () => {
       setLoading(true);
       setErr(null);

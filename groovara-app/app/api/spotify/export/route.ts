@@ -132,12 +132,19 @@ if (!user) {
   });
 
   // Get Spotify user id
-  const meRes = await fetch("https://api.spotify.com/v1/me", {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!meRes.ok) {
-    return NextResponse.json({ error: "Spotify /me failed" }, { status: 502 });
-  }
+    const meRes = await fetch("https://api.spotify.com/v1/me", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    
+    if (!meRes.ok) {
+      const text = await meRes.text();
+      console.error("SPOTIFY /me FAILED:", meRes.status, text);
+      return NextResponse.json(
+        { error: "Spotify /me failed", status: meRes.status },
+        { status: 502 }
+      );
+    }
+
   const me = (await meRes.json()) as SpotifyMe;
 
   // Create playlist
