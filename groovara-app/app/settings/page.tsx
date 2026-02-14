@@ -273,12 +273,20 @@ export default function SettingsPage() {
                           
                     <button
                       onClick={async () => {
-                        const res = await fetch("/api/spotify/disconnect", { method: "POST" });
+                        const { data: { session } } = await supabase.auth.getSession();
+                        const token = session?.access_token;
+                      
+                        const res = await fetch("/api/spotify/disconnect", {
+                          method: "POST",
+                          headers: token ? { Authorization: `Bearer ${token}` } : {},
+                        });
+                      
                         if (res.ok) {
                           setConnected(false);
                           setSpotifyProfile(null);
                         }
                       }}
+
                       className="mt-4 rounded-full border border-red-500/30 bg-red-500/10 px-6 py-3 text-xs tracking-widest text-red-200 hover:bg-red-500/20 transition"
                     >
                       DISCONNECT
