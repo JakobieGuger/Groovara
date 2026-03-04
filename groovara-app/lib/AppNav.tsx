@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import LogoutButton from "./Logout";
+import ThemeToggle from "./ThemeToggle";
 
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION;
 
@@ -106,8 +107,9 @@ export default function AppNav() {
           )}
         </div>
 
-        {/* Right side: keep intentionally empty for now */}
-        <div />
+        <div className="flex items-center">
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );

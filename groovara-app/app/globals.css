@@ -1,26 +1,119 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f4ecdb;
+  --foreground: #2f2a24;
+
+  --card: #faf2e2;
+  --card-foreground: #2f2a24;
+
+  --muted: #eee3cd;
+  --muted-foreground: #6b6052;
+
+  --border: #d7c7aa;
+  --input: #cfbf9f;
+  --ring: #a88f65;
+
+  --accent: #5b4531;
+  --accent-foreground: #f6efdf;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
+    --background: #0b0b0c;
     --foreground: #ededed;
+
+    --card: #121212;
+    --card-foreground: #ededed;
+
+    --muted: #1b1b1d;
+    --muted-foreground: #a1a1aa;
+
+    --border: #303036;
+    --input: #2a2a30;
+    --ring: #5c6470;
+
+    --accent: #f3f4f6;
+    --accent-foreground: #0b0b0c;
   }
 }
 
+html.light {
+  --background: #f4ecdb;
+  --foreground: #2f2a24;
+
+  --card: #faf2e2;
+  --card-foreground: #2f2a24;
+
+  --muted: #eee3cd;
+  --muted-foreground: #6b6052;
+
+  --border: #d7c7aa;
+  --input: #cfbf9f;
+  --ring: #a88f65;
+
+  --accent: #5b4531;
+  --accent-foreground: #f6efdf;
+
+  color-scheme: light;
+}
+
+html.dark {
+  --background: #0b0b0c;
+  --foreground: #ededed;
+
+  --card: #121212;
+  --card-foreground: #ededed;
+
+  --muted: #1b1b1d;
+  --muted-foreground: #a1a1aa;
+
+  --border: #303036;
+  --input: #2a2a30;
+  --ring: #5c6470;
+
+  --accent: #f3f4f6;
+  --accent-foreground: #0b0b0c;
+
+  color-scheme: dark;
+}
+
 body {
+  position: relative;
+  isolation: isolate;
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+html.light body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='96' height='96' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  background-size: 96px 96px;
+  opacity: 0.05;
 }
