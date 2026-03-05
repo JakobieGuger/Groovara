@@ -648,414 +648,418 @@ export default function TracklistDetailPage() {
   }
 
   return (
-    <main className="p-10">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-light tracking-wide">{item?.title}</h1>
-          <p className="mt-1 text-xs tracking-widest text-gray-500">TRACKLIST ID: {id}</p>
-        </div>
-
-        <button
-          onClick={remove}
-          className="text-xs tracking-widest text-gray-400 hover:text-red-300 transition"
-        >
-          DELETE
-        </button>
-      </div>
-
-      {!loading && songs.length === 0 && !pageError && (
-        <div className="mt-6">
-          <InlineNotice
-            kind="info"
-            title="No songs yet"
-            message="Add songs from Spotify/YouTube/Apple to start shaping the tracklist."
-          />
-        </div>
-      )}
-
-      <div className="mt-10 max-w-xl space-y-4">
-        <div>
-          <label className="block text-xs tracking-widest text-gray-400">TITLE</label>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-          />
-        </div>
-
-        {pageError && (
-          <InlineNotice kind="error" title="Something went wrong" message={pageError} />
-        )}
-
-        {pageInfo && <InlineNotice kind="info" message={pageInfo} />}
-
-        <div>
-          <label className="block text-xs tracking-widest text-gray-400">DESCRIPTION</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-            rows={5}
-          />
-        </div>
-
-        <div className="flex items-center gap-4">
+    <main className="gv-paper-bg min-h-screen">
+      <div className="gv-paper-content">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-light tracking-wide">{item?.title}</h1>
+          </div>
+    
           <button
-            onClick={save}
-            disabled={saving}
-            className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-purple-200 hover:bg-purple-500/20 transition disabled:opacity-50"
+            onClick={remove}
+            className="text-xs tracking-widest text-gray-400 hover:text-red-300 transition"
           >
-            {saving ? "SAVING…" : "SAVE"}
+            DELETE
           </button>
-
-          <Link
-            href="/tracklists"
-            className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
-          >
-            ← BACK
-          </Link>
         </div>
-      </div>
-
-      <div className="mt-12 flex items-center justify-between">
-        <h2 className="text-lg font-light tracking-wide">Songs</h2>
-
-        <button
-          onClick={() => (multiNoteMode ? exitMultiNoteMode() : setMultiNoteMode(true))}
-          className="rounded-full border border-purple-500/30 bg-purple-500/10 px-5 py-2 text-xs tracking-widest text-purple-200 hover:bg-purple-500/20 transition"
-        >
-          {multiNoteMode ? "EXIT MULTI-NOTE" : "MULTI-NOTE MODE"}
-        </button>
-      </div>
-
-      <button
-        onClick={async () => {
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const supaToken = session?.access_token;
-
-
-            const res = await fetch("/api/spotify/export", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                ...(session?.access_token
-                  ? { Authorization: `Bearer ${session.access_token}` }
-                  : {}),
-              },
-              body: JSON.stringify({ tracklistId: String(id) }),
-            });
-
-            const data: {
-              success?: boolean;
-              playlistUrl?: string | null;
-              exportedCount?: number;
-              error?: string;
-            } = await res.json();
-          
-            if (!res.ok) {
-              alert(data.error ?? "Export failed");
-              return;
-            }
-          
-            if (data.playlistUrl) {
-              window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
-            } else {
-              alert(`Exported ${data.exportedCount ?? 0} tracks. (No URL returned)`);
-            }
-          } catch {
-            alert("Export failed");
-          }
-        }}
-        className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-500"
-      >
-        Export to Spotify
-      </button>
-      {multiNoteMode ? (
-        <div className="mt-4 max-w-xl rounded-2xl border border-white/10 bg-white/5 p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs tracking-widest text-gray-400">MULTI-NOTE</p>
-              <p className="mt-2 text-sm text-gray-200">
-                Select songs below, then apply one note to all of them.
-              </p>
-              <p className="mt-2 text-xs tracking-widest text-gray-500">
-                {selectedCount} SELECTED{selectedRangeLabel ? ` • ${selectedRangeLabel}` : ""}
-              </p>
-            </div>
-
+    
+        {!loading && songs.length === 0 && !pageError && (
+          <div className="mt-6">
+            <InlineNotice
+              kind="info"
+              title="No songs yet"
+              message="Add songs from Spotify/YouTube/Apple to start shaping the tracklist."
+            />
+          </div>
+        )}
+  
+        <div className="mt-10 max-w-xl space-y-4">
+          <div>
+            <label className="block text-xs tracking-widest text-gv-accent">TITLE</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="mt-2 w-full rounded-xl border gv-row border-white/10 bg-white/5 px-4 py-3 text-gv-accent outline-none focus:border-purple-500/40"
+            />
+          </div>
+      
+          {pageError && (
+            <InlineNotice kind="error" title="Something went wrong" message={pageError} />
+          )}
+  
+          {pageInfo && <InlineNotice kind="info" message={pageInfo} />}
+        
+          <div>
+            <label className="block text-xs tracking-widest text-gv-accent">DESCRIPTION</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="mt-2 w-full rounded-xl border gv-row border-white/10 bg-white/5 px-4 py-3 text-gv-accent outline-none focus:border-purple-500/40"
+              rows={5}
+            />
+          </div>
+        
+          <div className="flex items-center gap-4">
             <button
-              onClick={exitMultiNoteMode}
+              onClick={save}
+              disabled={saving}
+              className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv-accent hover:bg-purple-500/20 transition disabled:opacity-50"
+            >
+              {saving ? "SAVING…" : "SAVE"}
+            </button>
+        
+            <Link
+              href="/tracklists"
               className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
             >
-              CLOSE
-            </button>
-          </div>
-
-          <textarea
-            value={multiNoteText}
-            onChange={(e) => setMultiNoteText(e.target.value)}
-            className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-            rows={4}
-            placeholder="Write a note to apply to the selected songs…"
-          />
-
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              onClick={applyNoteToSelected}
-              disabled={multiWorking || selectedCount === 0}
-              className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-purple-200 hover:bg-purple-500/20 transition disabled:opacity-50"
-            >
-              {multiWorking ? "APPLYING…" : "APPLY NOTE"}
-            </button>
-
-            <button
-              onClick={clearNoteForSelected}
-              disabled={multiWorking || selectedCount === 0}
-              className="rounded-full border border-red-500/30 bg-red-500/10 px-6 py-3 text-xs tracking-widest text-red-200 hover:bg-red-500/20 transition disabled:opacity-50"
-            >
-              {multiWorking ? "WORKING…" : "CLEAR NOTES"}
-            </button>
-
-            <span className="text-xs tracking-widest text-gray-500">
-              Tip: use checkboxes on each row.
-            </span>
+              ← BACK
+            </Link>
           </div>
         </div>
-      ) : null}
-
-      {/* Unified Search (wrapped instead of disabled prop) */}
-      <div className="mt-4">
-        <div className={busy ? "opacity-50 pointer-events-none" : ""}>
-          <UnifiedSearch onAdd={addSong} />
+        
+        <div className="mt-12 flex items-center justify-between">
+          <h2 className="text-lg font-light tracking-wide">Songs</h2>
+        
+          <button
+            onClick={() => (multiNoteMode ? exitMultiNoteMode() : setMultiNoteMode(true))}
+            className="rounded-full border border-purple-500/30 bg-purple-500/10 px-5 py-2 text-xs tracking-widest text-gv-accent hover:bg-purple-500/20 transition"
+          >
+            {multiNoteMode ? "EXIT MULTI-NOTE" : "MULTI-NOTE MODE"}
+          </button>
         </div>
-      </div>
-
-      {DEV_MANUAL_ADD && (
-        <div className="mt-4 border border-yellow-500/30 bg-yellow-500/10 p-3 rounded-lg">
-          <div className="text-xs text-yellow-300 tracking-widest mb-2">DEV ONLY</div>
-
-          <div className="max-w-xl rounded-2xl border border-white/10 bg-white/5 p-5">
-            <p className="text-xs tracking-widest text-gray-400">MANUAL ADD</p>
-
-            <div className="mt-4 grid gap-3">
-              <input
-                value={mTitle}
-                onChange={(e) => setMTitle(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-                placeholder="Song title"
-              />
-
-              <input
-                value={mArtist}
-                onChange={(e) => setMArtist(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-                placeholder="Artist"
-              />
-
-              <input
-                value={mAlbum}
-                onChange={(e) => setMAlbum(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-                placeholder="Album (optional)"
-              />
-
-              <input
-                value={mUrl}
-                onChange={(e) => setMUrl(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-                placeholder="Link (Spotify / YouTube / Apple Music / etc.)"
-              />
-
+        
+        <button
+          onClick={async () => {
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              const supaToken = session?.access_token;
+            
+            
+              const res = await fetch("/api/spotify/export", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(session?.access_token
+                    ? { Authorization: `Bearer ${session.access_token}` }
+                    : {}),
+                },
+                body: JSON.stringify({ tracklistId: String(id) }),
+              });
+            
+              const data: {
+                success?: boolean;
+                playlistUrl?: string | null;
+                exportedCount?: number;
+                error?: string;
+              } = await res.json();
+            
+              if (!res.ok) {
+                alert(data.error ?? "Export failed");
+                return;
+              }
+            
+              if (data.playlistUrl) {
+                window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
+              } else {
+                alert(`Exported ${data.exportedCount ?? 0} tracks. (No URL returned)`);
+              }
+            } catch {
+              alert("Export failed");
+            }
+          }}
+          className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-500"
+        >
+          Export to Spotify
+        </button>
+        {multiNoteMode ? (
+          <div className="mt-4 max-w-xl rounded-2xl gv-row border border-white/10 bg-white/5 p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs tracking-widest text-gray-400">MULTI-NOTE</p>
+                <p className="mt-2 text-sm text-gv-accent">
+                  Select songs below, then apply one note to all of them.
+                </p>
+                <p className="mt-2 text-xs tracking-widest text-gray-500">
+                  {selectedCount} SELECTED{selectedRangeLabel ? ` • ${selectedRangeLabel}` : ""}
+                </p>
+              </div>
+        
               <button
-                onClick={addManual}
-                disabled={addingManual}
-                className="mt-2 w-fit rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-purple-200 hover:bg-purple-500/20 transition disabled:opacity-50"
+                onClick={exitMultiNoteMode}
+                className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
               >
-                {addingManual ? "ADDING…" : "ADD SONG"}
+                CLOSE
               </button>
             </div>
+        
+            <textarea
+              value={multiNoteText}
+              onChange={(e) => setMultiNoteText(e.target.value)}
+              className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+              rows={4}
+              placeholder="Write a note to apply to the selected songs…"
+            />
+  
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                onClick={applyNoteToSelected}
+                disabled={multiWorking || selectedCount === 0}
+                className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv-accent hover:bg-purple-500/20 transition disabled:opacity-50"
+              >
+                {multiWorking ? "APPLYING…" : "APPLY NOTE"}
+              </button>
+        
+              <button
+                onClick={clearNoteForSelected}
+                disabled={multiWorking || selectedCount === 0}
+                className="rounded-full border border-red-500/30 bg-red-500/10 px-6 py-3 text-xs tracking-widest text-gv-accent hover:bg-red-500/20 transition disabled:opacity-50"
+              >
+                {multiWorking ? "WORKING…" : "CLEAR NOTES"}
+              </button>
+        
+              <span className="text-xs tracking-widest text-gray-500">
+                Use checkboxes on each row.
+              </span>
+            </div>
+          </div>
+        ) : null}
+  
+        {/* Unified Search (wrapped instead of disabled prop) */}
+        <div className="mt-4">
+          <div className={busy ? "opacity-50 pointer-events-none" : ""}>
+            <UnifiedSearch onAdd={addSong} />
           </div>
         </div>
-      )}
-
-      <div className="mt-8 space-y-2">
-        {songs.length === 0 ? (
-          <p className="text-sm text-gray-400">No songs yet. Add one above.</p>
-        ) : (
-          songs.map((s) => {
-            const noteOpen = expandedNoteId === s.id;
-            const hasNote = (s.note ?? "").trim().length > 0;
-            const selected = selectedIds.has(s.id);
-
-            return (
-              <div key={s.id} className="rounded-2xl border border-white/10 bg-white/5">
-                <div className="flex items-center justify-between gap-4 px-4 py-3">
-                  <a
-                    href={s.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="min-w-0 flex-1 hover:text-purple-200 transition"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {multiNoteMode ? (
-                        <input
-                          type="checkbox"
-                          checked={selected}
-                          onChange={() => toggleSelected(s.id)}
-                          className="h-4 w-4 accent-purple-400 flex-shrink-0"
-                        />
-                      ) : null}
-
-                      {s.platform && PLATFORM_ICONS[s.platform] ? (
-                        <Image
-                          src={PLATFORM_ICONS[s.platform]}
-                          alt={s.platform}
-                          width={16}
-                          height={16}
-                          className="opacity-80 flex-shrink-0"
-                        />
-                      ) : null}
-
-                      <p className="truncate text-sm text-gray-100">
-                        {s.position + 1}. {s.title}
-                      </p>
-                    </div>
-
-                    <p className="truncate text-xs text-gray-400">
-                      {s.artist}
-                      {s.album ? ` • ${s.album}` : ""}
-                    </p>
-                  </a>
-
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <button
-                      onClick={() => setExpandedNoteId(noteOpen ? null : s.id)}
-                      className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
-                      title="Song note"
-                    >
-                      NOTE {noteOpen ? "▴" : "▾"}{hasNote ? " •" : ""}
-                    </button>
-
-                    <button
-                      onClick={() => moveSong(s.id, "up")}
-                      className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
-                      title="Move up"
-                    >
-                      ↑
-                    </button>
-
-                    <button
-                      onClick={() => moveSong(s.id, "down")}
-                      className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
-                      title="Move down"
-                    >
-                      ↓
-                    </button>
-
-                    <button
-                      onClick={() => removeSong(s.id)}
-                      className="text-xs tracking-widest text-gray-400 hover:text-red-300 transition"
-                    >
-                      REMOVE
-                    </button>
-                  </div>
-                </div>
-
-                {noteOpen ? (
-                  <div className="px-4 pb-4">
-                    <textarea
-                      value={noteDraftById[s.id] ?? (s.note ?? "")}
-                      onChange={(e) =>
-                        setNoteDraftById((prev) => ({
-                          ...prev,
-                          [s.id]: e.target.value,
-                        }))
-                      }
-                      className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-                      rows={3}
-                      placeholder="What does this song mean to you?"
-                    />
-
-                    <div className="mt-3 flex items-center gap-3">
-                      <button
-                        onClick={() => saveSingleNote(s.id)}
-                        disabled={savingNoteId === s.id}
-                        className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-purple-200 hover:bg-purple-500/20 transition disabled:opacity-50"
-                      >
-                        {savingNoteId === s.id ? "SAVING…" : "SAVE NOTE"}
-                      </button>
-
-                      <button
-                        onClick={() => clearSingleNote(s.id)}
-                        disabled={savingNoteId === s.id}
-                        className="text-xs tracking-widest text-gray-400 hover:text-red-300 transition disabled:opacity-50"
-                      >
-                        CLEAR
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
+  
+        {DEV_MANUAL_ADD && (
+          <div className="mt-4 border border-yellow-500/30 bg-yellow-500/10 p-3 rounded-lg">
+            <div className="text-xs text-yellow-300 tracking-widest mb-2">DEV ONLY</div>
+        
+            <div className="max-w-xl rounded-2xl border border-white/10 bg-white/5 p-5">
+              <p className="text-xs tracking-widest text-gray-400">MANUAL ADD</p>
+        
+              <div className="mt-4 grid gap-3">
+                <input
+                  value={mTitle}
+                  onChange={(e) => setMTitle(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+                  placeholder="Song title"
+                />
+  
+                <input
+                  value={mArtist}
+                  onChange={(e) => setMArtist(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+                  placeholder="Artist"
+                />
+  
+                <input
+                  value={mAlbum}
+                  onChange={(e) => setMAlbum(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+                  placeholder="Album (optional)"
+                />
+  
+                <input
+                  value={mUrl}
+                  onChange={(e) => setMUrl(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+                  placeholder="Link (Spotify / YouTube / Apple Music / etc.)"
+                />
+  
+                <button
+                  onClick={addManual}
+                  disabled={addingManual}
+                  className="mt-2 w-fit rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-purple-200 hover:bg-purple-500/20 transition disabled:opacity-50"
+                >
+                  {addingManual ? "ADDING…" : "ADD SONG"}
+                </button>
               </div>
-            );
-          })
+            </div>
+          </div>
         )}
-
-        <div className="mt-10 max-w-xl rounded-2xl border border-white/10 bg-white/5 p-5">
-          <p className="text-xs tracking-widest text-gray-400">CREATE MIXLIST</p>
-
-          <textarea
-            value={mixMsg}
-            onChange={(e) => setMixMsg(e.target.value)}
-            className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-            rows={4}
-            placeholder="Optional message/context for the person receiving this…"
-          />
-
-          <textarea
-            value={mixFinish}
-            onChange={(e) => setMixFinish(e.target.value)}
-            className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-            rows={4}
-            placeholder="Finishing note (only shown at the end)…"
-          />
-
-          <label className="mt-4 flex items-center gap-3 text-xs tracking-widest text-gray-400">
-            <input
-              type="checkbox"
-              checked={mixReveal}
-              onChange={(e) => setMixReveal(e.target.checked)}
-              className="h-4 w-4 accent-purple-500"
+  
+        <div className="mt-8 space-y-2">
+          {songs.length === 0 ? (
+            <p className="text-sm text-gray-400">No songs yet. Add one above.</p>
+          ) : (
+            songs.map((s) => {
+              const noteOpen = expandedNoteId === s.id;
+              const hasNote = (s.note ?? "").trim().length > 0;
+              const selected = selectedIds.has(s.id);
+            
+              return (
+                <div
+                  key={s.id}
+                  className="rounded-2xl gv-row"
+                >
+                  <div className="flex items-center justify-between gap-4 px-4 py-3">
+                    <a
+                      href={s.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="min-w-0 flex-1 transition hover:text-purple-700 dark:hover:text-purple-200"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {multiNoteMode ? (
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggleSelected(s.id)}
+                            className="h-4 w-4 accent-purple-400 flex-shrink-0"
+                          />
+                        ) : null}
+  
+                        {s.platform && PLATFORM_ICONS[s.platform] ? (
+                          <Image
+                            src={PLATFORM_ICONS[s.platform]}
+                            alt={s.platform}
+                            width={16}
+                            height={16}
+                            className="opacity-80 flex-shrink-0"
+                          />
+                        ) : null}
+  
+                        <p className="truncate text-sm text-zinc-900 dark:text-gv-accent">
+                          {s.position + 1}. {s.title}
+                        </p>
+                      </div>
+                      
+                      <p className="truncate text-xs text-zinc-600 dark:text-gv-accent">
+                        {s.artist}
+                        {s.album ? ` • ${s.album}` : ""}
+                      </p>
+                    </a>
+                      
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <button
+                        onClick={() => setExpandedNoteId(noteOpen ? null : s.id)}
+                        className="text-xs tracking-widest text-gv-accent hover:text-purple-300 transition"
+                        title="Song note"
+                      >
+                        NOTE {noteOpen ? "▴" : "▾"}{hasNote ? " •" : ""}
+                      </button>
+                      
+                      <button
+                        onClick={() => moveSong(s.id, "up")}
+                        className="text-xs tracking-widest text-gv-accent hover:text-purple-300 transition"
+                        title="Move up"
+                      >
+                        ↑
+                      </button>
+                      
+                      <button
+                        onClick={() => moveSong(s.id, "down")}
+                        className="text-xs tracking-widest text-gv-accent hover:text-purple-300 transition"
+                        title="Move down"
+                      >
+                        ↓
+                      </button>
+                      
+                      <button
+                        onClick={() => removeSong(s.id)}
+                        className="text-xs tracking-widest text-gv-accent hover:text-red-300 transition"
+                      >
+                        REMOVE
+                      </button>
+                    </div>
+                  </div>
+                      
+                  {noteOpen ? (
+                    <div className="px-4 pb-4">
+                      <textarea
+                        value={noteDraftById[s.id] ?? (s.note ?? "")}
+                        onChange={(e) =>
+                          setNoteDraftById((prev) => ({
+                            ...prev,
+                            [s.id]: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+                        rows={3}
+                        placeholder="What does this song mean to you?"
+                      />
+  
+                      <div className="mt-3 flex items-center gap-3">
+                        <button
+                          onClick={() => saveSingleNote(s.id)}
+                          disabled={savingNoteId === s.id}
+                          className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv-accent hover:bg-purple-500/20 transition disabled:opacity-50"
+                        >
+                          {savingNoteId === s.id ? "SAVING…" : "SAVE NOTE"}
+                        </button>
+                      
+                        <button
+                          onClick={() => clearSingleNote(s.id)}
+                          disabled={savingNoteId === s.id}
+                          className="text-xs tracking-widest text-gv-accent hover:text-red-300 transition disabled:opacity-50"
+                        >
+                          CLEAR
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })
+          )}
+  
+          <div className="mt-10 max-w-xl rounded-2xl border border-white/10 gv-accent p-5">
+            <p className="text-xs tracking-widest text-gray-400">CREATE MIXLIST</p>
+        
+            <textarea
+              value={mixMsg}
+              onChange={(e) => setMixMsg(e.target.value)}
+              className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+              rows={4}
+              placeholder="Optional message/context for the person receiving this…"
             />
-            REVEAL MODE (ONE AT A TIME)
-          </label>
-
-          {/* NEW: toggle visibility of notes on the mixlist page */}
-          <label className="mt-3 flex items-center gap-2 text-xs tracking-widest text-gray-400">
-            <input
-              type="checkbox"
-              checked={includeSongNotes}
-              onChange={(e) => setIncludeSongNotes(e.target.checked)}
-              className="h-4 w-4 accent-purple-500"
+  
+            <textarea
+              value={mixFinish}
+              onChange={(e) => setMixFinish(e.target.value)}
+              className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+              rows={4}
+              placeholder="Finishing note (only shown at the end)…"
             />
-            INCLUDE SONG NOTES
-          </label>
-                    <label className="mt-3 flex items-center gap-2 text-xs tracking-widest text-gray-400">
-            <input
-              type="checkbox"
-              checked={mixIsPublic}
-              onChange={(e) => setMixIsPublic(e.target.checked)}
-              className="h-4 w-4 accent-purple-500"
-            />
-            PUBLIC (ACCESS BY LINK)
-          </label>
-          <button
-            onClick={createMixlist}
-            disabled={creatingMix}
-            className="mt-5 rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-purple-200 hover:bg-purple-500/20 transition disabled:opacity-50"
-          >
-            {creatingMix ? "CREATING…" : "CREATE MIXLIST"}
-          </button>
+  
+            <label className="mt-4 flex items-center gap-3 text-xs tracking-widest text-gray-400">
+              <input
+                type="checkbox"
+                checked={mixReveal}
+                onChange={(e) => setMixReveal(e.target.checked)}
+                className="h-4 w-4 accent-purple-500"
+              />
+              REVEAL MODE (ONE AT A TIME)
+            </label>
+        
+            {/* NEW: toggle visibility of notes on the mixlist page */}
+            <label className="mt-3 flex items-center gap-2 text-xs tracking-widest text-gray-400">
+              <input
+                type="checkbox"
+                checked={includeSongNotes}
+                onChange={(e) => setIncludeSongNotes(e.target.checked)}
+                className="h-4 w-4 accent-purple-500"
+              />
+              INCLUDE SONG NOTES
+            </label>
+                      <label className="mt-3 flex items-center gap-2 text-xs tracking-widest text-gray-400">
+              <input
+                type="checkbox"
+                checked={mixIsPublic}
+                onChange={(e) => setMixIsPublic(e.target.checked)}
+                className="h-4 w-4 accent-purple-500"
+              />
+              PUBLIC (ACCESS BY LINK)
+            </label>
+            <button
+              onClick={createMixlist}
+              disabled={creatingMix}
+              className="mt-5 rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv-accent hover:bg-purple-500/20 transition disabled:opacity-50"
+            >
+              {creatingMix ? "CREATING…" : "CREATE MIXLIST"}
+            </button>
+          </div>
         </div>
       </div>
     </main>

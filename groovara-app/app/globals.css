@@ -1,21 +1,32 @@
 @import "tailwindcss";
 
+/*
+  Groovara theme tokens
+  - next-themes controls html.light / html.dark
+  - Avoid prefers-color-scheme overrides; they can fight next-themes during hydration
+*/
+
 :root {
-  --background: #f4ecdb;
-  --foreground: #2f2a24;
+  /* Light defaults (warm parchment) */
+  --background: #f2ede2;        /* parchment */
+  --foreground: #2b2a28;        /* charcoal ink */
 
-  --card: #faf2e2;
-  --card-foreground: #2f2a24;
+  --card: #f7f2e8;              /* paper panel */
+  --card-foreground: #2b2a28;
 
-  --muted: #eee3cd;
-  --muted-foreground: #6b6052;
+  --muted: #ede6d8;             /* warm wash */
+  --muted-foreground: #625b52;  /* warm gray */
 
-  --border: #d7c7aa;
-  --input: #cfbf9f;
-  --ring: #a88f65;
+  --border: #d6cebf;            /* soft hairline */
+  --input: #d6cebf;
+  --ring: #b8ad99;
 
-  --accent: #5b4531;
-  --accent-foreground: #f6efdf;
+  --accent: #2b2a28;
+  --accent-foreground: #f7f2e8;
+
+  /* Subtle studio tints */
+  --studio-track: #f7f2e8;      /* slightly warmer */
+  --studio-mix: #f5efe4;        /* slightly cooler */
 }
 
 @theme inline {
@@ -35,46 +46,32 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
 
+  --color-studio-track: var(--studio-track);
+  --color-studio-mix: var(--studio-mix);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0b0b0c;
-    --foreground: #ededed;
-
-    --card: #121212;
-    --card-foreground: #ededed;
-
-    --muted: #1b1b1d;
-    --muted-foreground: #a1a1aa;
-
-    --border: #303036;
-    --input: #2a2a30;
-    --ring: #5c6470;
-
-    --accent: #f3f4f6;
-    --accent-foreground: #0b0b0c;
-  }
-}
-
 html.light {
-  --background: #f4ecdb;
-  --foreground: #2f2a24;
+  --background: #f2ede2;
+  --foreground: #2b2a28;
 
-  --card: #faf2e2;
-  --card-foreground: #2f2a24;
+  --card: #f7f2e8;
+  --card-foreground: #2b2a28;
 
-  --muted: #eee3cd;
-  --muted-foreground: #6b6052;
+  --muted: #ede6d8;
+  --muted-foreground: #625b52;
 
-  --border: #d7c7aa;
-  --input: #cfbf9f;
-  --ring: #a88f65;
+  --border: #d6cebf;
+  --input: #d6cebf;
+  --ring: #b8ad99;
 
-  --accent: #5b4531;
-  --accent-foreground: #f6efdf;
+  --accent: #2b2a28;
+  --accent-foreground: #f7f2e8;
+
+  --studio-track: #f7f2e8;
+  --studio-mix: #f5efe4;
 
   color-scheme: light;
 }
@@ -96,6 +93,9 @@ html.dark {
   --accent: #f3f4f6;
   --accent-foreground: #0b0b0c;
 
+  --studio-track: #171516;
+  --studio-mix: #17181a;
+
   color-scheme: dark;
 }
 
@@ -104,16 +104,291 @@ body {
   isolation: isolate;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans, Arial, Helvetica, sans-serif);
 }
 
+/* -------------------------------
+   LIGHT MODE CHARACTER LAYERS
+   (kept subtle to avoid “glare”)
+--------------------------------- */
+
+/* Paper grain — very faint */
 html.light body::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: -1;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='96' height='96' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
-  background-size: 96px 96px;
-  opacity: 0.05;
+  z-index: 0;
+
+  /* Dialed down: noticeable only if you look for it */
+  opacity: 0.022;
+  mix-blend-mode: soft-light;
+
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.34'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/* Faint horizontal print lines — even fainter */
+html.light body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+
+  opacity: 0.015;
+  mix-blend-mode: soft-light;
+
+  background-image:
+    linear-gradient(
+      to bottom,
+      rgba(40, 30, 20, 0.030) 1px,
+      rgba(0, 0, 0, 0) 1px
+    );
+  background-size: 100% 84px;
+}
+
+/* -------------------------------
+   LANDING PAGE UTILITIES
+--------------------------------- */
+
+.gv-paper-surface {
+  /* Gives panels a “paper-on-paper” feel */
+  background-image:
+    radial-gradient(900px 220px at 20% 0%, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0)),
+    radial-gradient(700px 200px at 85% 15%, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0));
+}
+
+.gv-panel-shadow {
+  box-shadow: 0 14px 28px rgba(40, 30, 20, 0.14);
+}
+
+html.dark .gv-panel-shadow {
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.44);
+}
+
+/* -------------------------------
+   NAVBAR: light-mode cream strip
+--------------------------------- */
+
+.gv-nav-surface {
+  position: relative; /* needed for ::after grain layer */
+}
+
+/* light mode: grainy cream strip + hairline edge */
+html.light .gv-nav-surface {
+  background: rgba(236, 223, 202, 0.88); /* warm tan */
+  border-bottom: 1px solid rgba(214, 206, 191, 0.75);
+  backdrop-filter: blur(10px);
+}
+
+/* grain inside nav only */
+html.light .gv-nav-surface::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  opacity: 0.08;
+  mix-blend-mode: multiply;
+
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.28'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/* dark mode: keep the existing vibe */
+html.dark .gv-nav-surface {
+  background: rgba(0, 0, 0, 0.40);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  backdrop-filter: blur(10px);
+}
+
+/* Charcoal “ink edge” so GROOVARA reads on light nav */
+html.light .gv-brand-mark {
+  text-shadow:
+    0 1px 0 rgba(40, 30, 20, 0.22),
+    0 0 0.5px rgba(40, 30, 20, 0.35);
+}
+/* -------------------------------------------------
+   Groovara Paper Texture (seamless, fileless)
+   Works in light + dark via blend + opacity vars
+-------------------------------------------------- */
+
+:root {
+  --paper-grain-opacity: 0.045;
+  --paper-lines-opacity: 0.030;
+  --paper-speck-opacity: 0.020;
+}
+
+html.dark {
+  --paper-grain-opacity: 0.060;
+  --paper-lines-opacity: 0.020;
+  --paper-speck-opacity: 0.030;
+}
+
+/* Use this as a background on any page/container */
+.gv-paper-bg {
+  position: relative;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Layer 1: grain */
+.gv-paper-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+
+  opacity: var(--paper-grain-opacity);
+  mix-blend-mode: multiply;
+
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+/* Layer 2: faint print lines + specks */
+.gv-paper-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+
+  /* Two sublayers: lines + specks */
+  background-image:
+    /* print lines */
+    linear-gradient(
+      to bottom,
+      rgba(40, 30, 20, 0.028) 1px,
+      rgba(0, 0, 0, 0) 1px
+    ),
+    /* specks (second turbulence field) */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='turbulence' baseFrequency='1.2' numOctaves='1' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -9'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23s)' opacity='.18'/%3E%3C/svg%3E");
+
+  background-repeat: repeat, repeat;
+  background-size: 100% 88px, 180px 180px;
+
+  /* Opacity is “split”: lines + specks via overall opacity + blend */
+  opacity: 1;
+  mix-blend-mode: soft-light;
+}
+
+html.light .gv-paper-bg {
+  background-image:
+    radial-gradient(900px 500px at 50% 0%, rgba(255,255,255,0.25), rgba(255,255,255,0)),
+    radial-gradient(1100px 700px at 50% 40%, rgba(0,0,0,0), rgba(40,30,20,0.06));
+}
+
+/* Dark mode tweak: grain should feel like paper fibers, not dust */
+html.dark .gv-paper-bg::before {
+  mix-blend-mode: soft-light;
+}
+
+html.dark .gv-paper-bg::after {
+  mix-blend-mode: overlay;
+  opacity: 0.85;
+}
+
+/* Ensure page content stays above texture layers */
+.gv-paper-content {
+  position: relative;
+  z-index: 1;
+}
+/* Groovara accent text color */
+
+.gv-accent {
+  color: #5b3cc4; /* deeper purple for light mode */
+}
+
+.gv-accent:hover {
+  color: #4a2fb0;
+}
+
+html.dark .gv-accent {
+  color: #c4b5fd; /* current lavender */
+}
+
+html.dark .gv-accent:hover {
+  color: #ddd6fe;
+}
+
+/* -------------------------------
+   LIST / ROW SURFACES + TEXT
+   Use these on song rows / list items.
+--------------------------------- */
+
+.gv-row {
+  /* light mode: paper panel */
+  background: rgba(247, 242, 232, 0.78);
+  border: 1px solid rgba(214, 206, 191, 0.70);
+  box-shadow: 0 10px 22px rgba(40, 30, 20, 0.10);
+  backdrop-filter: blur(8px);
+}
+
+html.dark .gv-row {
+  /* dark mode: soft charcoal, not pitch black */
+  background: rgba(18, 18, 20, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.45);
+}
+
+/* Primary text inside rows */
+.gv-row-text {
+  color: #2b2a28; /* light mode: ink */
+}
+
+html.dark .gv-row-text {
+  color: rgba(255, 255, 255, 0.92); /* dark mode: brighter white */
+}
+
+/* Secondary/meta text inside rows (artist, album, platform, etc.) */
+.gv-row-subtext {
+  color: rgba(43, 42, 40, 0.68); /* light mode: warm gray */
+}
+
+html.dark .gv-row-subtext {
+  color: rgba(255, 255, 255, 0.62); /* dark mode: softer gray */
+}
+
+/* -------------------------------
+   LIST / ROW SURFACES + TEXT
+   Use these on song rows / list items.
+--------------------------------- */
+
+.gv-row {
+  /* light mode: paper panel */
+  background: rgba(247, 242, 232, 0.78);
+  border: 1px solid rgba(214, 206, 191, 0.70);
+  box-shadow: 0 10px 22px rgba(40, 30, 20, 0.10);
+  backdrop-filter: blur(8px);
+}
+
+html.dark .gv-row {
+  /* dark mode: soft charcoal, not pitch black */
+  background: rgba(18, 18, 20, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.45);
+}
+
+/* Primary text inside rows */
+.gv-row-text {
+  color: #2b2a28; /* light mode: ink */
+}
+
+html.dark .gv-row-text {
+  color: rgba(255, 255, 255, 0.92); /* dark mode: brighter white */
+}
+
+/* Secondary/meta text inside rows (artist, album, platform, etc.) */
+.gv-row-subtext {
+  color: rgba(43, 42, 40, 0.68); /* light mode: warm gray */
+}
+
+html.dark .gv-row-subtext {
+  color: rgba(255, 255, 255, 0.62); /* dark mode: softer gray */
 }

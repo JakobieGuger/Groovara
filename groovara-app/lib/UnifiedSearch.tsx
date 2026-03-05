@@ -119,15 +119,15 @@ export default function UnifiedSearch({
         <select
           value={platform}
           onChange={(e) => setPlatform(e.target.value as PlatformKey)}
-          className="rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+          className="rounded-xl gv-row border border-white/10 bg-white/5 px-3 py-3 text-gv_accent outline-none focus:border-purple-500/40"
         >
-          <option value="spotify" className="bg-black text-white">
+          <option value="spotify" className="gv_row text-gv_accent">
             Spotify
           </option>
-          <option value="youtube" className="bg-black text-white">
+          <option value="youtube" className="gv_row text-gv_accent">
             YouTube
           </option>
-          <option value="apple" className="bg-black text-white">
+          <option value="apple" className="gv_row text-gv_accent">
             Apple Music
           </option>
         </select>
@@ -136,7 +136,7 @@ export default function UnifiedSearch({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="w-full rounded-xl border border-white/10 bg-black/5 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+          className="w-full rounded-xl gv-row border border-white/10 bg-black/5 px-4 py-3 text-gv_accent outline-none focus:border-purple-500/40"
           placeholder={
             platform === "spotify"
               ? "Search Spotify… (song, artist, album)"
@@ -165,8 +165,8 @@ export default function UnifiedSearch({
               </div>
 
               <div className="min-w-0">
-                <p className="truncate text-sm text-gray-100">{r.title}</p>
-                <p className="truncate text-xs text-gray-400">
+                <p className="truncate text-sm text-gv_accent">{r.title}</p>
+                <p className="truncate text-xs text-gv_accent">
                   {r.artist}
                   {r.album ? ` • ${r.album}` : ""}
                 </p>
@@ -183,7 +183,7 @@ export default function UnifiedSearch({
                 setErr(null);
               }
               }}
-              className="rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-[10px] tracking-widest text-purple-200 hover:bg-purple-500/20 transition flex-shrink-0"
+              className="rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-[10px] tracking-widest text-gv_accent hover:bg-purple-500/20 transition flex-shrink-0"
             >
               ADD
             </button>

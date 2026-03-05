@@ -417,15 +417,21 @@ export default function MixlistPage() {
   }
 
   return (
-    <main
-      className="relative min-h-screen overflow-hidden p-6 text-gray-200 sm:p-10"
-      style={{
-        background:
-          ambientTrack != null
-            ? `radial-gradient(circle at 20% 12%, ${ambientTrack.theme.accentColor}22, transparent 45%), radial-gradient(circle at 80% 84%, ${ambientTrack.theme.glowColor}26, transparent 40%), #050507`
-            : "#050507",
-      }}
-    >
+<main
+  className="relative min-h-screen overflow-hidden p-6 text-foreground sm:p-10"
+  style={{
+    // Only force the fancy glow background in dark mode.
+    // Light mode should be your parchment/paper system via globals.css.
+    background:
+      typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+        ? ambientTrack != null
+          ? `radial-gradient(circle at 20% 12%, ${ambientTrack.theme.accentColor}22, transparent 45%),
+             radial-gradient(circle at 80% 84%, ${ambientTrack.theme.glowColor}26, transparent 40%),
+             #050507`
+          : "#050507"
+        : undefined,
+  }}
+>
       <div className="pointer-events-none absolute inset-0">
         <TrackScene
           track={ambientTrack}
@@ -436,10 +442,10 @@ export default function MixlistPage() {
 
       <div className="relative z-10">
       <div className="flex max-w-3xl items-center justify-between">
-        <h1 className="text-2xl font-light tracking-wide">Mixlist</h1>
+        <h1 className="gv_accent text-2xl font-light tracking-wide">Mixlist</h1>
         <button
           onClick={handleCopyLink}
-          className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-[11px] tracking-[0.22em] text-gray-300 transition hover:bg-white/10 xl:hidden"
+          className="gv_row gv_accent rounded-full px-4 py-2 text-[11px] tracking-[0.22em] transition xl:hidden"
         >
           COPY LINK
         </button>
@@ -448,12 +454,12 @@ export default function MixlistPage() {
       <div className="mt-3 flex max-w-3xl items-center gap-4">
         <Link
           href="/"
-          className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] tracking-[0.2em] text-gray-300 transition hover:bg-white/10"
+          className="gv_row gv_accent rounded-full px-3 py-1 text-[11px] tracking-[0.2em] transition"
         >
           HOME
         </Link>
         {copyStatus && (
-          <span className="text-xs tracking-widest text-gray-500 xl:hidden">{copyStatus}</span>
+          <span className="text-xs tracking-widest text-muted-foreground xl:hidden">{copyStatus}</span>
         )}
       </div>
 
@@ -507,12 +513,12 @@ export default function MixlistPage() {
               />
             </TrackTransition>
           ) : (
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-white/65">
+            <div className="gv_row rounded-3xl p-6 text-sm text-muted-foreground">
               Select a song to begin.
             </div>
           )}
 
-          <div className="space-y-2 rounded-3xl border border-white/10 bg-white/5 p-3">
+          <div className="gv_row space-y-2 rounded-3xl p-3">
             {visibleSongs.map((s, idx) => {
               const isHidden = mix.reveal_mode && clicked[idx] !== true;
 
@@ -529,10 +535,10 @@ export default function MixlistPage() {
                         return next;
                       });
                     }}
-                    className="block w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-4 text-left transition hover:border-white/20"
+                    className="gv_row block w-full rounded-2xl px-4 py-4 text-left transition"
                   >
-                    <p className="text-sm text-gray-100">Song {idx + 1}</p>
-                    <p className="mt-1 text-xs text-gray-400">Click to reveal</p>
+                    <p className="gv_accent text-sm">Song {idx + 1}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Click to reveal</p>
                   </button>
                 );
               }
@@ -549,18 +555,16 @@ export default function MixlistPage() {
                       setSelectedIndex(idx);
                     }
                   }}
-                  className={`rounded-2xl border bg-black/25 px-4 py-3 transition ${
-                    idx === safeSelectedIndex
-                      ? "border-white/35"
-                      : "border-white/10 hover:border-white/20"
-                  }`}
+                    className={`gv_row rounded-2xl border px-4 py-3 transition ${
+                      idx === safeSelectedIndex ? "ring-1 ring-[color:var(--ring)]" : ""
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm text-gray-100">
+                      <p className="gv_accent text-sm">
                         {idx + 1}. {s.title}
                       </p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-muted-foreground">
                         {s.artist}
                         {s.album ? ` - ${s.album}` : ""}
                       </p>
@@ -585,16 +589,16 @@ export default function MixlistPage() {
             <button
               onClick={handleRevealNext}
               disabled={!canRevealNext}
-              className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-purple-200 transition hover:bg-purple-500/20 disabled:opacity-40 disabled:hover:bg-purple-500/10"
+              className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv-accent hover:bg-purple-500/20 transition disabled:opacity-50"
             >
               REVEAL NEXT
             </button>
           ) : null}
 
           {showFinishingNote ? (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-              <p className="text-xs tracking-widest text-gray-400">FINISHING NOTE</p>
-              <p className="mt-3 whitespace-pre-wrap text-sm text-gray-200">{mix.finishing_note}</p>
+            <div className="gv_row rounded-2xl p-5">
+              <p className="text-xs tracking-widest text-muted-foreground">FINISHING NOTE</p>
+              <p className="gv_accent mt-3 whitespace-pre-wrap text-sm">{mix.finishing_note}</p>
             </div>
           ) : null}
         </div>
@@ -602,16 +606,16 @@ export default function MixlistPage() {
         <div className="hidden xl:block">
           <div className="sticky top-8 space-y-4">
             {mix.message ? (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                <p className="text-xs tracking-widest text-gray-400">MESSAGE</p>
-                <p className="mt-3 whitespace-pre-wrap text-sm text-gray-200">{mix.message}</p>
+              <div className="gv_row rounded-2xl p-5">
+                <p className="text-xs tracking-widest text-muted-foreground">MESSAGE</p>
+                <p className="gv_accent text-sm">{mix.message}</p>
               </div>
             ) : null}
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="rounded-2xl border border-gv_row bg-white/5 p-4">
               <button
                 onClick={handleCopyLink}
-                className="w-full rounded-full border border-white/15 bg-white/5 px-4 py-2 text-[11px] tracking-[0.22em] text-gray-300 transition hover:bg-white/10"
+                className="w-full rounded-full border border-white/15 bg-white/5 px-4 py-2 text-[11px] tracking-[0.22em] text-gv_accent transition hover:bg-white/10"
               >
                 COPY LINK
               </button>
@@ -619,19 +623,18 @@ export default function MixlistPage() {
                 <p className="mt-2 text-center text-xs tracking-widest text-gray-500">{copyStatus}</p>
               ) : null}
             </div>
-
             {mix.include_song_notes ? (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                <p className="text-xs tracking-widest text-gray-400">{noteRangeLabel}</p>
-
+              <div className="gv_row mt-4 rounded-2xl border border-border p-5">
+                <p className="text-xs tracking-[0.22em] text-muted-foreground">{noteRangeLabel}</p>
+            
                 {!activeSong ? (
-                  <p className="mt-3 text-sm text-gray-400">No song selected.</p>
+                  <p className="mt-3 text-sm text-muted-foreground">No song selected.</p>
                 ) : activeIsHidden ? (
-                  <p className="mt-3 text-sm text-gray-400">Reveal this song to see the note.</p>
+                  <p className="mt-3 text-sm text-muted-foreground">Reveal this song to see the note.</p>
                 ) : (activeSong.note ?? "").trim().length > 0 ? (
-                  <p className="mt-3 whitespace-pre-wrap text-sm text-gray-200">{activeSong.note}</p>
+                  <p className="gv_accent mt-3 whitespace-pre-wrap text-sm">{activeSong.note}</p>
                 ) : (
-                  <p className="mt-3 text-sm text-gray-400">No note for this song.</p>
+                  <p className="mt-3 text-sm text-muted-foreground">No note for this song.</p>
                 )}
               </div>
             ) : null}
