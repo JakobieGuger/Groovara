@@ -9,6 +9,7 @@ type EmbeddedPlayerProps = {
   isHidden: boolean;
   title?: string;
   artist?: string;
+  autoplay?: boolean;
 };
 
 function isValidSpotifyTrackId(value: string | null | undefined): value is string {
@@ -96,6 +97,7 @@ export default function EmbeddedPlayer({
   isHidden,
   title,
   artist,
+  autoplay = false,
 }: EmbeddedPlayerProps) {
   if (isHidden) {
     return (
@@ -112,7 +114,7 @@ export default function EmbeddedPlayer({
 
     if (spotifyTrackId) {
       const embedTitle = [title, artist].filter(Boolean).join(" - ") || "Spotify player";
-      const src = `https://open.spotify.com/embed/track/${spotifyTrackId}`;
+      const src = `https://open.spotify.com/embed/track/${spotifyTrackId}${autoplay ? "?utm_source=generator" : ""}`;
 
       return (
         <div className="rounded-2xl border border-border bg-muted/80 p-3">
@@ -201,7 +203,7 @@ export default function EmbeddedPlayer({
   const youtubeId = extractYouTubeId(url);
   if (youtubeId) {
     const embedTitle = [title, artist].filter(Boolean).join(" - ") || "YouTube player";
-    const src = `https://www.youtube.com/embed/${youtubeId}`;
+    const src = `https://www.youtube.com/embed/${youtubeId}?autoplay=${autoplay ? 1 : 0}&rel=0`;
 
     return (
       <div className="rounded-2xl border border-border bg-muted/80 p-3">

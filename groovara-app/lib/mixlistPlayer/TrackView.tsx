@@ -18,6 +18,7 @@ type TrackViewProps = {
   onNext?: () => void;
   disabledPrev?: boolean;
   disabledNext?: boolean;
+  autoplay?: boolean;
 };
 
 const itemVariants: Variants = {
@@ -42,6 +43,7 @@ export default function TrackView({
   onNext,
   disabledPrev = false,
   disabledNext = false,
+  autoplay = false,
 }: TrackViewProps) {
   const displayTitle = isRevealed ? track.title : "Hidden song";
   const displayArtist = isRevealed ? track.artist : "Reveal to view details";
@@ -121,10 +123,11 @@ export default function TrackView({
           <EmbeddedPlayer
             url={track.url}
             platform={track.platform}
-            trackId={(track as UiTrack & { trackid?: string | null }).trackid ?? null}
+            trackId={(track as UiTrack & { trackId?: string | null }).trackId ?? null}
             isHidden={!isRevealed}
             title={track.title}
             artist={track.artist}
+            autoplay={autoplay}
           />
         </motion.div>
 

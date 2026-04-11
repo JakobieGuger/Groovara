@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import InlineNotice from "../../lib/InlineNotice";
 import { supabase } from "../../lib/supabaseClient";
+import {
+  loadOrInitializeSettingsAction,
+  saveSettingsAction,
+} from "./actions";
 
 type UserSettings = {
   user_id: string;
@@ -18,11 +22,26 @@ type SpotifyProfile = {
   image_url: string | null;
 };
 
+function getActionError(result: {
+  type: string;
+  message?: string;
+  formErrors?: string[];
+  fieldErrors?: Record<string, string[] | undefined>;
+}) {
+  if (result.type === "validation") {
+    return (
+      result.formErrors?.[0] ??
+      Object.values(result.fieldErrors ?? {}).flat().find(Boolean) ??
+      "Invalid settings input."
+    );
+  }
+
+  return result.message ?? "Something went wrong.";
+}
+
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const [userId, setUserId] = useState<string | null>(null);
   const [settings, setSettings] = useState<UserSettings | null>(null);
 
   const [msg, setMsg] = useState<string | null>(null);
@@ -33,7 +52,9 @@ export default function SettingsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         const token = session?.access_token;
 
         const res = await fetch("/api/spotify/status", {
@@ -55,89 +76,43 @@ export default function SettingsPage() {
       setErr(null);
       setMsg(null);
 
-      const { data: userData, error: userErr } = await supabase.auth.getUser();
-      const uid = userData.user?.id ?? null;
+      const result = await loadOrInitializeSettingsAction();
 
-      if (userErr || !uid) {
-        setUserId(null);
+      if (!result.ok) {
         setSettings(null);
-        setErr("You must be logged in to view settings.");
+        setErr(result.message);
         setLoading(false);
         return;
       }
 
-      setUserId(uid);
-
-      const { data, error } = await supabase
-        .from("user_settings")
-        .select("user_id,default_reveal_mode,default_include_song_notes,default_is_public")
-        .eq("user_id", uid)
-        .maybeSingle();
-
-      if (error) {
-        setErr("Failed to load settings.");
-        setLoading(false);
-        return;
-      }
-
-      if (!data) {
-        const defaults: UserSettings = {
-          user_id: uid,
-          default_reveal_mode: true,
-          default_include_song_notes: true,
-          default_is_public: true,
-        };
-
-        const { data: inserted, error: insErr } = await supabase
-          .from("user_settings")
-          .upsert(defaults)
-          .select("user_id,default_reveal_mode,default_include_song_notes,default_is_public")
-          .single();
-
-        if (insErr || !inserted) {
-          setErr("Failed to initialize settings.");
-          setLoading(false);
-          return;
-        }
-
-        setSettings(inserted as UserSettings);
-        setLoading(false);
-        return;
-      }
-
-      setSettings(data as UserSettings);
+      setSettings(result.settings);
       setLoading(false);
     };
 
-    run();
+    void run();
   }, []);
 
   const save = async () => {
-    if (!userId || !settings) return;
+    if (!settings) return;
 
     setSaving(true);
     setErr(null);
     setMsg(null);
 
-    const { error } = await supabase
-      .from("user_settings")
-      .upsert(
-        {
-          user_id: userId,
-          default_reveal_mode: settings.default_reveal_mode,
-          default_include_song_notes: settings.default_include_song_notes,
-          default_is_public: settings.default_is_public,
-        },
-        { onConflict: "user_id" }
-      );
+    const result = await saveSettingsAction({
+      default_reveal_mode: settings.default_reveal_mode,
+      default_include_song_notes: settings.default_include_song_notes,
+      default_is_public: settings.default_is_public,
+    });
 
     setSaving(false);
 
-    if (error) {
-      setErr("Failed to save settings.");
+    if (!result.ok) {
+      setErr(getActionError(result));
       return;
     }
 
+    setSettings(result.settings);
     setMsg("Saved.");
     window.setTimeout(() => setMsg(null), 1200);
   };

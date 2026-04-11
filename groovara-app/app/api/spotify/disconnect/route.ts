@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { writeAuditLog } from "@/lib/security/auditLog";
 
 export const runtime = "nodejs";
 
@@ -69,6 +70,17 @@ export async function POST(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: "Failed to disconnect" }, { status: 500 });
   }
+
+  await writeAuditLog({
+    eventType: "spotify_disconnect",
+    userId: user.id,
+    resourceType: "spotify_account",
+    resourceId: user.id,
+    success: true,
+    metadata: {
+      source: "app/api/spotify/disconnect/route.ts",
+    },
+  });
 
   return NextResponse.json({ success: true });
 }

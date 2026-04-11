@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { writeAuditLog } from "@/lib/security/auditLog";
 
 export const runtime = "nodejs";
 
@@ -169,6 +170,17 @@ export async function GET(req: NextRequest) {
       new URL("/settings?error=db_upsert_failed", process.env.NEXT_PUBLIC_SITE_URL)
     );
   }
+
+  await writeAuditLog({
+    eventType: "spotify_connect",
+    userId: user.id,
+    resourceType: "spotify_account",
+    resourceId: user.id,
+    success: true,
+    metadata: {
+      source: "app/api/spotify/callback/route.ts",
+    },
+  });
 
   // Clear the bridge token cookie (no reason to keep it)
   cookieStore.set("gv_spotify_supa_token", "", {

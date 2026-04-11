@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import InlineNotice from "../../lib/InlineNotice";
+import {
+  deleteTracklistAction,
+  importSpotifyTracklistAction,
+} from "./actions";
 
 type Tracklist = {
   id: string;
@@ -14,6 +18,23 @@ type Tracklist = {
 
 const accentLink =
   "text-xs tracking-widest gv-accent hover:text-purple-900 dark:gv-accent dark:hover:text-purple-200 transition";
+
+function getActionError(result: {
+  type: string;
+  message?: string;
+  formErrors?: string[];
+  fieldErrors?: Record<string, string[] | undefined>;
+}) {
+  if (result.type === "validation") {
+    return (
+      result.formErrors?.[0] ??
+      Object.values(result.fieldErrors ?? {}).flat().find(Boolean) ??
+      "Invalid request."
+    );
+  }
+
+  return result.message ?? "Something went wrong.";
+}
 
 export default function TracklistsPage() {
   const [items, setItems] = useState<Tracklist[]>([]);
@@ -48,15 +69,15 @@ export default function TracklistsPage() {
   const remove = async (id: string) => {
     if (!confirm("Delete this tracklist?")) return;
 
-    const { error } = await supabase.from("tracklists").delete().eq("id", id);
-    if (error) {
-      setErr(error.message);
+    const result = await deleteTracklistAction({ tracklistId: id });
+    if (!result.ok) {
+      setErr(getActionError(result));
       return;
     }
+
     setItems((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Import Logic
   const runSpotifyImport = async () => {
     setImportErr(null);
     const url = importUrl.trim();
@@ -96,43 +117,19 @@ export default function TracklistsPage() {
         throw new Error("No tracks found. Is the playlist public?");
       }
 
-      const { data: userData, error: userErr } = await supabase.auth.getUser();
-      const userId = userData.user?.id;
-      if (userErr || !userId) throw new Error("Not authenticated.");
+      const result = await importSpotifyTracklistAction({
+        playlistName,
+        playlistDescription: playlistDesc,
+        tracks,
+      });
 
-      const { data: tl, error: tlErr } = await supabase
-        .from("tracklists")
-        .insert({
-          user_id: userId,
-          title: playlistName,
-          description: playlistDesc,
-        })
-        .select("id")
-        .single();
-
-      if (tlErr || !tl?.id) throw new Error(tlErr?.message ?? "Failed to create tracklist.");
-
-      const tracklistId = tl.id as string;
-
-      const rows = tracks.map((t, idx) => ({
-        tracklist_id: tracklistId,
-        position: idx,
-        platform: "spotify",
-        track_id: t.track_id,
-        title: t.title,
-        artist: t.artist,
-        album: t.album ?? null,
-        url: t.url,
-        note: null,
-        version: null,
-      }));
-
-      const { error: insErr } = await supabase.from("tracklist_songs").insert(rows);
-      if (insErr) throw new Error(insErr.message ?? "Failed to insert songs.");
+      if (!result.ok) {
+        throw new Error(getActionError(result));
+      }
 
       setImportOpen(false);
       setImportUrl("");
-      window.location.href = `/tracklists/${tracklistId}`;
+      window.location.href = `/tracklists/${result.tracklistId}`;
     } catch (e: unknown) {
       console.error(e);
       const msg = e instanceof Error ? e.message : "Unknown error";
@@ -212,7 +209,6 @@ export default function TracklistsPage() {
           REFRESH
         </button>
 
-        {/* Import Modal */}
         {importOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
             <div className="w-full max-w-xl rounded-2xl border border-border bg-card p-6 shadow-2xl">

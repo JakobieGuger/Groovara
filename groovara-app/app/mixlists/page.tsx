@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import InlineNotice from "../../lib/InlineNotice";
+import { deleteMixlistAction } from "./actions";
 
 type MixlistRow = {
   id: string;
@@ -11,6 +12,23 @@ type MixlistRow = {
   message: string | null;
   created_at: string | null;
 };
+
+function getActionError(result: {
+  type: string;
+  message?: string;
+  formErrors?: string[];
+  fieldErrors?: Record<string, string[] | undefined>;
+}) {
+  if (result.type === "validation") {
+    return (
+      result.formErrors?.[0] ??
+      Object.values(result.fieldErrors ?? {}).flat().find(Boolean) ??
+      "Invalid mixlist input."
+    );
+  }
+
+  return result.message ?? "Failed to delete mixlist.";
+}
 
 export default function MixlistsPage() {
   const [loading, setLoading] = useState(true);
@@ -51,15 +69,10 @@ export default function MixlistsPage() {
     const ok = confirm("Delete this mixlist? This can’t be undone.");
     if (!ok) return;
 
-    const { error: childErr } = await supabase.from("mixlist_songs").delete().eq("mixlist_id", id);
-    if (childErr) {
-      setErr(childErr.message);
-      return;
-    }
+    const result = await deleteMixlistAction({ mixlistId: id });
 
-    const { error } = await supabase.from("mixlists").delete().eq("id", id);
-    if (error) {
-      setErr(error.message);
+    if (!result.ok) {
+      setErr(getActionError(result));
       return;
     }
 

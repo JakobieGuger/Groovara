@@ -1,52 +1,99 @@
-export default function Home() {
+"use client";
+
+import { useActionState } from "react";
+import { useSearchParams } from "next/navigation";
+import { signupAction } from "./actions";
+
+const initialState = {
+  error: "",
+  success: "",
+};
+
+export default function SignupPage() {
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") || "/hub";
+  const codeFromUrl = searchParams.get("code") || "";
+  const [state, formAction, pending] = useActionState(signupAction, initialState);
+
   return (
-    <main className="min-h-screen bg-[#0b0a0f] text-gray-200">
-      {/* Header */}
-      <header className="flex items-center justify-between px-10 py-6">
-        <h1 className="text-sm tracking-[0.35em] font-medium text-purple-300">
-          GROOVARA
-        </h1>
-        <nav className="space-x-8 text-xs tracking-widest text-gray-400">
-          <a href="#" className="hover:text-purple-300 transition">HOME</a>
-          <a href="#" className="hover:text-purple-300 transition">LIST</a>
-        </nav>
-      </header>
+    <main className="min-h-screen bg-[#0b0a0f] text-gray-200 flex items-center justify-center p-6">
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 p-8">
+        <h1 className="text-2xl font-light tracking-wide text-center">Sign Up</h1>
+        <p className="mt-3 text-sm text-gray-400 text-center">
+          Create an account to start building Tracklists and Mixlists.
+        </p>
 
-      {/* Hero */}
-      <section
-        className="relative h-[65vh] bg-cover bg-center"
-        style={{
-          backgroundImage: "url('/GV_HomepageImage.jpg')",
-        }}
-      >
-        <div className="absolute inset-0 bg-black/55" />
+        <form action={formAction} className="mt-8 space-y-4">
+          <input type="hidden" name="next" value={next} />
 
-        <div className="relative z-10 flex h-full items-center justify-center">
-          <div className="text-center px-6">
-            <p className="mb-6 text-xs tracking-[0.4em] text-purple-400">
-              NOT A MIXTAPE. NOT A PLAYLIST.
-            </p>
-            <h2 className="text-2xl md:text-3xl font-light tracking-wide text-gray-100">
-              Something new is coming.
-            </h2>
+          <input
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            placeholder="Email"
+            className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none placeholder:text-gray-500"
+          />
+
+          <input
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            required
+            placeholder="Password"
+            className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none placeholder:text-gray-500"
+          />
+
+          <input
+            name="confirmPassword"
+            type="password"
+            autoComplete="new-password"
+            required
+            placeholder="Confirm Password"
+            className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none placeholder:text-gray-500"
+          />
+
+          <div>
+            <label className="mb-2 block text-xs uppercase tracking-widest text-gray-400">
+              Beta Code
+            </label>
+            <input
+              name="betaCode"
+              type="text"
+              required
+              defaultValue={codeFromUrl}
+              className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none placeholder:text-gray-500"
+              placeholder="Enter your beta code"
+            />
           </div>
-        </div>
-      </section>
 
-      {/* Message */}
-      <section className="py-20 text-center px-6">
-        <p className="text-lg font-light tracking-wide text-gray-300 mb-6">
-          A fresh way to share the meanings inside your music.
-        </p>
-        <p className="text-sm tracking-widest text-purple-300">
-          SIMPLE. PERSONAL. UNFORGETTABLE.
-        </p>
-      </section>
+          {state?.error ? (
+            <p className="text-sm text-red-400">{state.error}</p>
+          ) : null}
 
-      {/* Footer */}
-      <footer className="py-10 text-center text-xs tracking-widest text-gray-500">
-        © {new Date().getFullYear()} GROOVARA
-      </footer>
+          {state?.success ? (
+            <p className="text-sm text-green-400">{state.success}</p>
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={pending}
+            className="w-full rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-purple-200 transition hover:bg-purple-500/20 disabled:opacity-50"
+          >
+            {pending ? "CREATING ACCOUNT..." : "CREATE ACCOUNT"}
+          </button>
+        </form>
+
+        <p className="mt-6 text-center text-sm text-gray-400">
+          Already have an account?{" "}
+          <a
+            href={`/login?next=${encodeURIComponent(next)}`}
+            className="text-purple-300 hover:text-purple-200"
+          >
+            Login
+          </a>
+        </p>
+      </div>
     </main>
   );
 }

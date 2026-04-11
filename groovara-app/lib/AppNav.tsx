@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import LogoutButton from "./Logout";
 import ThemeToggle from "./ThemeToggle";
+import { usePathname } from "next/navigation";
+import Image from "next/image";
 
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION;
 
@@ -15,6 +17,7 @@ type MenuItem =
 export default function AppNav() {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const pathname = usePathname();
 
   const items: MenuItem[] = [
     { type: "link", label: "Home", href: "/hub" },
@@ -23,6 +26,11 @@ export default function AppNav() {
     { type: "divider" },
     { type: "link", label: "Settings", href: "/settings" },
     { type: "link", label: "About", href: "/about" },
+    {
+      type: "link",
+      label: "Feedback",
+      href: `/feedback?from=${encodeURIComponent(pathname)}`,
+    },
     { type: "divider" },
     { type: "custom", node: <LogoutButton /> },
   ];
@@ -56,6 +64,13 @@ export default function AppNav() {
             aria-haspopup="menu"
             aria-expanded={open}
           >
+              <Image
+                src="/groovara-icon.png"
+                alt="Groovara logo"
+                width={22}
+                height={22}
+                className="h-[22px] w-[22px]"
+              />
             {/* gv-brand-mark adds a subtle charcoal “ink edge” in light mode */}
             <span className="gv-brand-mark tracking-[0.35em] text-sm text-foreground gv-accent">
               GROOVARA

@@ -1,0 +1,42 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+
+export async function GET(request: NextRequest) {
+  const url = request.nextUrl;
+  const code = url.searchParams.get("code");
+  const next = url.searchParams.get("next") ?? "/hub";
+
+  if (!code) {
+    return NextResponse.redirect(new URL("/login?error=no_code", url.origin));
+  }
+
+  const response = NextResponse.redirect(new URL(next, url.origin));
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
+      },
+    }
+  );
+
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+  if (error) {
+    console.error("OAuth callback exchange failed:", error);
+    return NextResponse.redirect(
+      new URL(`/login?error=${encodeURIComponent(error.message)}`, url.origin)
+    );
+  }
+
+  return response;
+}

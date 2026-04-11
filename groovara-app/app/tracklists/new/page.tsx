@@ -3,8 +3,24 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { supabase } from "../../../lib/supabaseClient";
-import { requireUserId } from "../../../lib/auth";
+import { createTracklistAction } from "./actions";
+
+function getActionError(result: {
+  type: string;
+  message?: string;
+  formErrors?: string[];
+  fieldErrors?: Record<string, string[] | undefined>;
+}) {
+  if (result.type === "validation") {
+    return (
+      result.formErrors?.[0] ??
+      Object.values(result.fieldErrors ?? {}).flat().find(Boolean) ??
+      "Invalid tracklist input."
+    );
+  }
+
+  return result.message ?? "Failed to create tracklist.";
+}
 
 export default function NewTracklistPage() {
   const router = useRouter();
@@ -13,26 +29,18 @@ export default function NewTracklistPage() {
   const [saving, setSaving] = useState(false);
 
   const create = async () => {
-    const trimmed = title.trim();
-    if (!trimmed) return alert("Title is required.");
-
     setSaving(true);
     try {
-      const userId = await requireUserId();
+      const result = await createTracklistAction({
+        title,
+        description,
+      });
 
-      const { data, error } = await supabase
-        .from("tracklists")
-        .insert({
-          user_id: userId,
-          title: trimmed,
-          description: description.trim() || null,
-        })
-        .select("id")
-        .single();
+      if (!result.ok) {
+        throw new Error(getActionError(result));
+      }
 
-      if (error) throw error;
-
-      router.push(`/tracklists/${data.id}`);
+      router.push(`/tracklists/${result.tracklistId}`);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to create tracklist.";
       alert(msg);
@@ -87,9 +95,7 @@ export default function NewTracklistPage() {
             disabled={saving}
             className={[
               "rounded-full border px-6 py-3 text-xs tracking-widest transition disabled:opacity-50",
-              // light mode=
               "border-[#5b3cc4]/40 gv-accent text-[#4a2fb0] hover:bg-[#5b3cc4]/15",
-              // dark mode
               "dark:border-purple-500/40 dark:bg-purple-500/10 dark:text-purple-200 dark:hover:bg-purple-500/20",
             ].join(" ")}
           >
