@@ -1,6 +1,6 @@
-import LoginForm from "./LoginForm";
+import EnterBetaGoogleForm from "./EnterBetaGoogleForm";
 
-export default async function LoginPage({
+export default async function EnterBetaGooglePage({
   searchParams,
 }: {
   searchParams: Promise<{ next?: string; code?: string }>;
@@ -8,7 +8,7 @@ export default async function LoginPage({
   const params = await searchParams;
 
   return (
-    <LoginForm
+    <EnterBetaGoogleForm
       next={params?.next || "/hub"}
       codeFromUrl={params?.code || ""}
     />

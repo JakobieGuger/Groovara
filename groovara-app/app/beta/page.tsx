@@ -12,6 +12,10 @@ export default async function BetaPage({
     ? `/signup?code=${encodeURIComponent(code)}`
     : "/signup";
 
+  const loginHref = code
+    ? `/login?code=${encodeURIComponent(code)}`
+    : "/login";
+
   return (
     <main className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
       <div className="w-full max-w-2xl rounded-3xl border border-border bg-card/80 px-8 py-12 shadow-xl backdrop-blur md:px-12 md:py-16">
@@ -59,7 +63,7 @@ export default async function BetaPage({
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Link
-              href="/login"
+              href={loginHref}
               className="inline-flex min-w-[180px] items-center justify-center rounded-full border border-purple-500/50 bg-purple-500/15 px-6 py-3 text-sm font-medium tracking-wide text-purple-300 transition hover:bg-purple-500/25"
             >
               Log In
