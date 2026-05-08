@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     default: "Groovara",
     template: "%s | Groovara",
   },
-  description: "Meaning-first music sharing.",
+  description: "Heart of a mixtape. Power of a playlist.",
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",

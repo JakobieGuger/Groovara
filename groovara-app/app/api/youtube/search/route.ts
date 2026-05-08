@@ -49,13 +49,22 @@ export async function GET(req: Request) {
 
     const res = await fetch(url, { cache: "no-store" });
 
-    if (!res.ok) {
-      const text = await res.text();
-      return NextResponse.json(
-        { error: `YouTube search failed (${res.status})`, detail: text.slice(0, 300) },
-        { status: 500 }
-      );
-    }
+  if (!res.ok) {
+    const text = await res.text();
+  
+    console.error("YouTube search failed", {
+      status: res.status,
+      body: text,
+    });
+  
+    return NextResponse.json(
+      {
+        error: `YouTube search failed (${res.status})`,
+        detail: text.slice(0, 1000),
+      },
+      { status: res.status }
+    );
+  }
 
     const json = (await res.json()) as YouTubeSearchResponse;
 

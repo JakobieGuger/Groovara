@@ -20,6 +20,7 @@ import {
   updateTracklistMetadataAction,
 } from "./actions";
 import { deleteTracklistAction } from "../actions";
+import CharacterCounter from "@/lib/CharacterCounter";
 
 type Tracklist = {
   id: string;
@@ -111,6 +112,10 @@ export default function TracklistDetailPage() {
   const [multiWorking, setMultiWorking] = useState(false);
 
   const selectedCount = selectedIds.size;
+
+  const SONG_NOTE_LIMIT = 2000;
+  const MIXLIST_MESSAGE_LIMIT = 1000;
+  const FINISHING_NOTE_LIMIT = 2000;  
 
   const busy =
     saving ||
@@ -562,8 +567,8 @@ export default function TracklistDetailPage() {
     <main className="gv-paper-bg min-h-screen">
       <div className="gv-paper-content">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-light tracking-wide">{item?.title}</h1>
+          <div className="flex-1 text-center">
+            <h1 className="text-3xl font-semibold tracking-wide text-gv-accent">{item?.title}</h1>
           </div>
 
           <button
@@ -706,10 +711,13 @@ export default function TracklistDetailPage() {
             <textarea
               value={multiNoteText}
               onChange={(e) => setMultiNoteText(e.target.value)}
+              maxLength={SONG_NOTE_LIMIT}
               className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
               rows={4}
               placeholder="Write a note to apply to the selected songs…"
             />
+
+            <CharacterCounter value={multiNoteText} max={SONG_NOTE_LIMIT} />
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button
@@ -883,9 +891,15 @@ export default function TracklistDetailPage() {
                             [s.id]: e.target.value,
                           }))
                         }
+                        maxLength={SONG_NOTE_LIMIT}
                         className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
                         rows={3}
                         placeholder="What does this song mean to you?"
+                      />
+
+                      <CharacterCounter
+                        value={noteDraftById[s.id] ?? (s.note ?? "")}
+                        max={SONG_NOTE_LIMIT}
                       />
 
                       <div className="mt-3 flex items-center gap-3">
@@ -914,22 +928,27 @@ export default function TracklistDetailPage() {
 
           <div className="mt-10 max-w-xl rounded-2xl border border-white/10 gv-accent p-5">
             <p className="text-xs tracking-widest text-gray-400">CREATE MIXLIST</p>
+              <textarea
+                value={mixMsg}
+                onChange={(e) => setMixMsg(e.target.value)}
+                maxLength={MIXLIST_MESSAGE_LIMIT}
+                className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+                rows={4}
+                placeholder="Optional message/context for the person receiving this…"
+              />
 
-            <textarea
-              value={mixMsg}
-              onChange={(e) => setMixMsg(e.target.value)}
-              className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-              rows={4}
-              placeholder="Optional message/context for the person receiving this…"
-            />
+              <CharacterCounter value={mixMsg} max={MIXLIST_MESSAGE_LIMIT} />
 
-            <textarea
-              value={mixFinish}
-              onChange={(e) => setMixFinish(e.target.value)}
-              className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-              rows={4}
-              placeholder="Finishing note (only shown at the end)…"
-            />
+              <textarea
+                value={mixFinish}
+                onChange={(e) => setMixFinish(e.target.value)}
+                maxLength={FINISHING_NOTE_LIMIT}
+                className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+                rows={4}
+                placeholder="Finishing note (only shown at the end)…"
+              />
+
+              <CharacterCounter value={mixFinish} max={FINISHING_NOTE_LIMIT} />
 
             <label className="mt-4 flex items-center gap-3 text-xs tracking-widest text-gray-400">
               <input
@@ -964,7 +983,7 @@ export default function TracklistDetailPage() {
               disabled={creatingMix}
               className="mt-5 rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv-accent hover:bg-purple-500/20 transition disabled:opacity-50"
             >
-              {creatingMix ? "CREATING…" : "CREATE MIXLIST"}
+              {creatingMix ? "PUBLISHING…" : "PUBLISH MIXLIST"}
             </button>
           </div>
         </div>

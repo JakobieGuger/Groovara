@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { submitFeedbackAction } from "./actions";
+import CharacterCounter from "@/lib/CharacterCounter";
 
 const initialState = {
   error: "",
@@ -14,6 +15,7 @@ export default function FeedbackForm() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const from = searchParams.get("from") || pathname;
+  const [message, setMessage] = useState("");
 
   const [state, formAction, pending] = useActionState(
     submitFeedbackAction,
@@ -60,10 +62,13 @@ export default function FeedbackForm() {
               name="message"
               required
               rows={7}
-              maxLength={1000}
+              maxLength={2000}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
               placeholder="What happened, what felt wrong, or what would make this better?"
               className="w-full rounded-2xl border border-border bg-background/60 px-4 py-3 text-sm text-foreground outline-none resize-y"
             />
+            <CharacterCounter value={message} max={2000} />
           </div>
 
           {state.error ? (

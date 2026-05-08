@@ -28,14 +28,14 @@ export default function HubPage() {
           {/* CARDS */}
           <div className="mx-auto mt-10 grid max-w-5xl gap-7 dark:mt-10 dark:gap-6 lg:grid-cols-2">
             <StudioPanel
-              title="TRACKLISTS"
-              subtitle="Your private listening spaces."
+              title="STUDIO"
+              subtitle="Your private listening space."
               panelClassName="bg-[#f7f2e8] dark:bg-studio-track"
               primaryHref="/tracklists/new"
-              primaryLabel="+ Start a new Tracklist"
+              primaryLabel="+ Start a new Mixlist"
               primaryDescription="Shape music for yourself."
               secondaryHref="/tracklists"
-              secondaryLabel="See my Tracklists →"
+              secondaryLabel="See my Mixlist Concepts →"
             />
 
             <StudioPanel
@@ -43,17 +43,13 @@ export default function HubPage() {
               subtitle="Music shared with intention."
               panelClassName="bg-[#f5efe4] dark:bg-studio-mix"
               primaryHref="/tracklists"
-              primaryLabel="+ Create a Mixlist"
+              primaryLabel="+ Publish a Mixlist"
               primaryDescription="Build something meant to travel."
               secondaryHref="/mixlists"
               secondaryLabel="See my Mixlists →"
               microInfo=""
             />
           </div>
-
-          <p className="mt-16 text-center text-sm text-[#6a6358] dark:mt-14 dark:text-muted-foreground">
-            Tracklists stay with you. Mixlists travel.
-          </p>
         </div>
       </div>
     </main>

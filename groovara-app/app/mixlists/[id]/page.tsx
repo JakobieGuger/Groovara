@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import InlineNotice from "../../../lib/InlineNotice";
 import { supabase } from "../../../lib/supabaseClient";
@@ -16,6 +16,7 @@ import {
 
 type Mixlist = {
   id: string;
+  title: string | null;
   message: string | null;
   finishing_note: string | null;
   reveal_mode: boolean;
@@ -68,6 +69,7 @@ function toUiTrack(song: MixSong, index: number): UiTrack {
 export default function MixlistPage() {
   const params = useParams<{ id: string }>();
   const mixlistId = params.id;
+  const router = useRouter();
   
 
   const [mix, setMix] = useState<Mixlist | null>(null);
@@ -146,7 +148,7 @@ export default function MixlistPage() {
 
       const { data: mixData, error: mixErr } = await supabase
         .from("mixlists")
-        .select("id,message,finishing_note,reveal_mode,include_song_notes")
+        .select("id,title,message,finishing_note,reveal_mode,include_song_notes")
         .eq("id", mixlistId)
         .maybeSingle();
 
@@ -575,8 +577,12 @@ export default function MixlistPage() {
       </div>
 
       <div className="relative z-10">
-        <div className="flex max-w-3xl items-center justify-between">
-          <h1 className="gv_accent text-2xl font-light tracking-wide">Mixlist</h1>
+        <div className="flex items-center justify-between">
+          <div className="flex-1 text-center">
+            <h1 className="text-3xl font-semibold tracking-wide text-gv-accent">
+              {mix.title || "Untitled Mixlist"}
+            </h1>
+          </div>
           <button
             onClick={handleCopyLink}
             className="gv_row gv_accent rounded-full px-4 py-2 text-[11px] tracking-[0.22em] transition xl:hidden"
@@ -586,12 +592,6 @@ export default function MixlistPage() {
         </div>
 
         <div className="mt-3 flex max-w-3xl items-center gap-4">
-          <Link
-            href="/"
-            className="gv_row gv_accent rounded-full px-3 py-1 text-[11px] tracking-[0.2em] transition"
-          >
-            HOME
-          </Link>
           {copyStatus && (
             <span className="text-xs tracking-widest text-muted-foreground xl:hidden">{copyStatus}</span>
           )}
@@ -727,16 +727,6 @@ export default function MixlistPage() {
               })}
             </div>
 
-            {mix.reveal_mode && revealedSlots < songs.length && clicked[0] === true ? (
-              <button
-                onClick={handleRevealNext}
-                disabled={!canRevealNext}
-                className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv_accent hover:bg-purple-500/20 transition disabled:opacity-50"
-              >
-                REVEAL NEXT
-              </button>
-            ) : null}
-
             {showFinishingNote ? (
               <div className="gv_row rounded-2xl p-5">
                 <p className="text-xs tracking-widest text-muted-foreground">FINISHING NOTE</p>
@@ -756,7 +746,7 @@ export default function MixlistPage() {
 
               <div className="gv_row rounded-2xl p-4">
                 <label className="mb-2 block text-xs tracking-[0.22em] text-muted-foreground">
-                  PLATFORM
+                  LISTEN ON:
                 </label>
 
                 <select
@@ -802,6 +792,15 @@ export default function MixlistPage() {
                     <p className="mt-3 text-sm text-muted-foreground">No note for this song.</p>
                   )}
                 </div>
+              ) : null}
+
+              {mix.reveal_mode && clicked[0] === true && revealedSlots <= songs.length ? (
+                <button
+                  onClick={canRevealNext ? handleRevealNext : () => router.push('/mixlists')}
+                  className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv_accent hover:bg-purple-500/20 transition disabled:opacity-50"
+                >
+                  {canRevealNext ? 'REVEAL NEXT' : 'BACK TO MIXLISTS'}
+                </button>
               ) : null}
             </div>
           </div>

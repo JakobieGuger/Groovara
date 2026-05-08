@@ -19,7 +19,7 @@ function getActionError(result: {
     );
   }
 
-  return result.message ?? "Failed to create tracklist.";
+  return result.message ?? "Failed to create mixlist.";
 }
 
 export default function NewTracklistPage() {
@@ -42,7 +42,7 @@ export default function NewTracklistPage() {
 
       router.push(`/tracklists/${result.tracklistId}`);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to create tracklist.";
+      const msg = e instanceof Error ? e.message : "Failed to create mixlist.";
       alert(msg);
     } finally {
       setSaving(false);
@@ -51,7 +51,7 @@ export default function NewTracklistPage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground p-10">
-      <h1 className="text-2xl font-light tracking-wide">Create Tracklist</h1>
+      <h1 className="text-2xl font-light tracking-wide">Start a new Mixlist</h1>
 
       <div className="mt-8 max-w-xl space-y-5">
         <div>

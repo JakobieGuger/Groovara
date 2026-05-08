@@ -143,7 +143,7 @@ export default function TracklistsPage() {
     <main className="gv-paper-bg min-h-screen">
       <div className="gv-paper-content p-10">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-light tracking-wide">Tracklists</h1>
+          <h1 className="text-2xl font-light tracking-wide">Mixlists</h1>
 
           <div className="flex items-center gap-6">
             <button onClick={() => setImportOpen(true)} className={accentLink}>

@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { enforceRateLimit } from "@/lib/security/rateLimit";
 import { RATE_LIMITS } from "@/lib/security/rateLimitConfig";
+import { LIMITS } from "@/lib/validation/limits";
+import { validateTextField } from "@/lib/validation/text";
 
 type FeedbackState = {
   error: string;
@@ -18,16 +20,18 @@ export async function submitFeedbackAction(
   const category = String(formData.get("category") || "").trim();
   const page = String(formData.get("page") || "").trim();
 
-  if (!message) {
-    return { error: "Please enter your feedback.", success: "" };
-  }
+  const feedbackValidationError = validateTextField({
+    value: message,
+    label: "Feedback",
+    min: 5,
+    max: LIMITS.feedbackMessage,
+  });
 
-  if (message.length < 5) {
-    return { error: "Feedback is too short.", success: "" };
-  }
-
-  if (message.length > 1000) {
-    return { error: "Feedback is too long.", success: "" };
+  if (feedbackValidationError) {
+    return {
+      error: feedbackValidationError,
+      success: "",
+    };
   }
 
   const supabase = await createClient();

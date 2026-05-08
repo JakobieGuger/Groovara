@@ -21,8 +21,8 @@ export default function AppNav() {
 
   const items: MenuItem[] = [
     { type: "link", label: "Home", href: "/hub" },
-    { type: "link", label: "My Tracklists", href: "/tracklists" },
-    { type: "link", label: "My Mixlists", href: "/mixlists" },
+    { type: "link", label: "Studio", href: "/tracklists" },
+    { type: "link", label: "Mixlists", href: "/mixlists" },
     { type: "divider" },
     { type: "link", label: "Settings", href: "/settings" },
     { type: "link", label: "About", href: "/about" },

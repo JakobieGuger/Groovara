@@ -2,13 +2,13 @@ import { z } from "zod";
 
 const MAX = {
   title: 120,
-  globalMessage: 1000,
-  finishingNote: 1000,
+  globalMessage: 2000,
+  finishingNote: 2000,
   songTitle: 300,
   artist: 200,
   album: 200,
   url: 2048,
-  note: 500,
+  note: 2000,
 };
 
 const hasControlChars = (value: string) => /[\u0000-\u001F\u007F]/.test(value);

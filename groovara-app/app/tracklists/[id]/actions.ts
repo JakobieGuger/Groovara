@@ -10,11 +10,14 @@ import {
 import { enforceRateLimit } from "@/lib/security/rateLimit";
 import { RATE_LIMITS } from "@/lib/security/rateLimitConfig";
 import { writeAuditLog } from "@/lib/security/auditLog";
+import { LIMITS } from "@/lib/validation/limits";
+import { validateTextField } from "@/lib/validation/text";
 
 type ValidationResult =
   | {
       ok: false;
       type: "validation";
+      message: string;
       fieldErrors: Record<string, string[] | undefined>;
       formErrors: string[];
     }
@@ -28,6 +31,7 @@ function validationFailure(error: z.ZodError): ValidationResult {
   return {
     ok: false,
     type: "validation",
+    message: "string",
     fieldErrors: flattened.fieldErrors,
     formErrors: flattened.formErrors,
   };
@@ -65,7 +69,7 @@ async function verifySongOwnership(
 ) {
   const { data, error } = await supabase
     .from("tracklist_songs")
-    .select("id,tracklist_id,position")
+    .select("id,title,position")
     .eq("id", songId)
     .eq("tracklist_id", tracklistId)
     .maybeSingle();
@@ -146,7 +150,10 @@ const saveSingleNoteSchema = z.object({
       const trimmed = value.trim();
       return trimmed === "" ? null : trimmed;
     },
-    z.string().max(500).nullable()
+    z.string().max(
+      LIMITS.songNote,
+      `Song note is too long. Maximum is ${LIMITS.songNote.toLocaleString()} characters.`
+    ).nullable()
   ),
 });
 
@@ -159,9 +166,14 @@ const multiNoteSchema = z.object({
       const trimmed = value.trim();
       return trimmed === "" ? null : trimmed;
     },
-    z.string().max(500).nullable()
+    z.string().max(
+      LIMITS.songNote,
+      `Song note is too long. Maximum is ${LIMITS.songNote.toLocaleString()} characters.`
+    ).nullable()
   ),
 });
+
+
 
 export async function createMixlistFromTracklistAction(
   rawInput: unknown
@@ -518,6 +530,7 @@ export async function saveTracklistSongNoteAction(rawInput: unknown): Promise<Ok
 
   const { tracklistId, songId, note } = parsed.data;
   const { supabase, user, error: authError } = await getAuthedUser();
+  
 
   if (authError || !user) {
     return { ok: false, type: "auth", message: "Not authenticated." };
@@ -556,6 +569,31 @@ export async function saveTracklistSongNoteAction(rawInput: unknown): Promise<Ok
   }
   if (!song) {
     return { ok: false, type: "not_found", message: "Song not found in this tracklist." };
+  }
+
+  const songNote = note ?? "";
+
+  const songLabel =
+    typeof song.position === "number" && song.title
+      ? `Song #${song.position + 1} “${song.title}” note`
+      : song.title
+        ? `“${song.title}” note`
+        : "Song note";
+
+  const noteValidationError = validateTextField({
+    value: songNote,
+    label: songLabel,
+    max: LIMITS.songNote,
+  });
+
+  if (noteValidationError) {
+    return {
+      ok: false,
+      type: "validation",
+      message: noteValidationError,
+      fieldErrors: {},
+      formErrors: [noteValidationError],
+    };
   }
 
   const { error } = await supabase
@@ -613,6 +651,8 @@ export async function applyTracklistNoteToSelectedAction(rawInput: unknown): Pro
     },
   });
 
+  
+
   if (!rateLimit.ok) {
     return {
       ok: false,
@@ -624,7 +664,7 @@ export async function applyTracklistNoteToSelectedAction(rawInput: unknown): Pro
 
   const { data: rows, error: rowsErr } = await supabase
     .from("tracklist_songs")
-    .select("id")
+    .select("id,title,position")
     .eq("tracklist_id", tracklistId)
     .in("id", songIds);
 
@@ -634,6 +674,33 @@ export async function applyTracklistNoteToSelectedAction(rawInput: unknown): Pro
 
   if (!rows || rows.length !== songIds.length) {
     return { ok: false, type: "not_found", message: "One or more selected songs are invalid." };
+  }
+
+  const bulkNote = note ?? "";
+
+  for (const row of rows) {
+    const rowLabel =
+      typeof row.position === "number" && row.title
+        ? `Song #${row.position + 1} “${row.title}” note`
+        : row.title
+          ? `“${row.title}” note`
+          : "Selected song note";
+
+    const noteValidationError = validateTextField({
+      value: bulkNote,
+      label: rowLabel,
+      max: LIMITS.songNote,
+    });
+
+    if (noteValidationError) {
+      return {
+        ok: false,
+        type: "validation",
+        message: noteValidationError,
+        fieldErrors: {},
+        formErrors: [noteValidationError],
+      };
+    }
   }
 
   const { error } = await supabase
