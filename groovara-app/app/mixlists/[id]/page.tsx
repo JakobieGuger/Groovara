@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import InlineNotice from "../../../lib/InlineNotice";
 import { supabase } from "../../../lib/supabaseClient";
@@ -69,13 +69,13 @@ function toUiTrack(song: MixSong, index: number): UiTrack {
 export default function MixlistPage() {
   const params = useParams<{ id: string }>();
   const mixlistId = params.id;
-  const router = useRouter();
   
 
   const [mix, setMix] = useState<Mixlist | null>(null);
   const [songs, setSongs] = useState<MixSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
@@ -106,6 +106,7 @@ export default function MixlistPage() {
   const [convertingTrack, setConvertingTrack] = useState(false);
 
   const handleCopyLink = async () => {
+    setExportMenuOpen(false);
     try {
       const url = window.location.href;
       if (navigator.clipboard?.writeText) {
@@ -123,6 +124,38 @@ export default function MixlistPage() {
     } catch {
       setCopyStatus("Couldn't copy. Copy from the address bar.");
       window.setTimeout(() => setCopyStatus(null), 2500);
+    }
+  };
+
+  const handleExportSpotify = async () => {
+    setExportMenuOpen(false);
+    
+    try {
+      const res = await fetch("/api/spotify/export", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mixlistId,
+        }),
+      });
+    
+      const data = await res.json();
+    
+      if (!res.ok) {
+        alert(data?.error ?? "Spotify export failed.");
+        return;
+      }
+    
+      if (data?.playlistUrl) {
+        window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
+      } else {
+        alert("Exported to Spotify.");
+      }
+    } catch (error) {
+      console.error("Spotify export failed", error);
+      alert("Spotify export failed.");
     }
   };
 
@@ -401,7 +434,6 @@ export default function MixlistPage() {
           },
           preferredPlatform
         );
-        console.log("converted track result", converted);
 
         if (!cancelled) {
           setConvertedActiveTrack(
@@ -514,6 +546,151 @@ export default function MixlistPage() {
     return `SONGS #${min}-#${max} NOTE`;
   }, [activeSong, safeSelectedIndex, songs]);
 
+  const songNoteCard = mix?.include_song_notes ? (
+    <div className="gv_row rounded-2xl border border-border p-5">
+      <p className="text-xs tracking-[0.22em] text-muted-foreground">
+        {noteRangeLabel}
+      </p>
+
+      {!activeSong ? (
+        <p className="mt-3 text-sm text-muted-foreground">No song selected.</p>
+      ) : activeIsHidden ? (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Reveal this song to see the note.
+        </p>
+      ) : (activeSong.note ?? "").trim().length > 0 ? (
+        <p className="gv_accent mt-3 whitespace-pre-wrap text-sm">
+          {activeSong.note}
+        </p>
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">
+          No note for this song.
+        </p>
+      )}
+    </div>
+  ) : null;
+
+  const messageCard = mix?.message ? (
+    <div className="gv_row rounded-2xl p-5">
+      <p className="text-xs tracking-widest text-muted-foreground">MESSAGE</p>
+      <p className="gv_accent mt-3 whitespace-pre-wrap text-sm">
+        {mix.message}
+      </p>
+    </div>
+  ) : null;
+
+  const platformSelectorCard = (
+  <div className="gv_row rounded-2xl p-4">
+    <label className="mb-2 block text-xs tracking-[0.22em] text-muted-foreground">
+      LISTEN ON
+    </label>
+
+    <select
+      value={preferredPlatform}
+      onChange={(e) => setPreferredPlatform(e.target.value as Platform)}
+      className="w-full appearance-none rounded-full border border-purple-500/40 bg-black/70 px-4 py-3 text-sm text-white outline-none transition hover:bg-black/80"
+    >
+      <option value="spotify" className="bg-black text-white">
+        Spotify
+      </option>
+      <option value="youtube" className="bg-black text-white">
+        YouTube
+      </option>
+      <option value="apple" className="bg-black text-white">
+        Apple Music
+      </option>
+    </select>
+
+    {convertingTrack ? (
+      <p className="mt-2 text-xs tracking-widest text-muted-foreground">
+        Converting current track...
+      </p>
+    ) : null}
+  </div>
+);
+
+const copyLinkCard = (
+  <div className="gv_row rounded-2xl p-4">
+    <div className="grid grid-cols-2 gap-3">
+      <button
+        onClick={handleCopyLink}
+        className="gv_row gv_accent rounded-full px-4 py-2 text-[11px] tracking-[0.22em] transition"
+      >
+        COPY LINK
+      </button>
+
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setExportMenuOpen((open) => !open)}
+          className="gv_row gv_accent w-full rounded-full px-4 py-2 text-[11px] tracking-[0.22em] transition"
+        >
+          EXPORT
+        </button>
+
+        {exportMenuOpen ? (
+          <div className="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-2xl border border-border bg-background/95 p-2 shadow-xl backdrop-blur">
+            <button
+              type="button"
+              onClick={handleExportSpotify}
+              className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-foreground transition hover:bg-purple-500/10"
+            >
+              <span>Spotify</span>
+              <span className="text-xs text-purple-300">Export</span>
+            </button>
+
+            <button
+              type="button"
+              disabled
+              className="flex w-full cursor-not-allowed items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-muted-foreground opacity-70"
+            >
+              <span>Apple Music</span>
+              <span className="text-[10px] uppercase tracking-widest">
+                Coming soon
+              </span>
+            </button>
+
+            <button
+              type="button"
+              disabled
+              className="flex w-full cursor-not-allowed items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-muted-foreground opacity-70"
+            >
+              <span>YouTube</span>
+              <span className="text-[10px] uppercase tracking-widest">
+                Coming soon
+              </span>
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+
+    {copyStatus ? (
+      <p className="mt-2 text-center text-xs tracking-widest text-muted-foreground">
+        {copyStatus}
+      </p>
+    ) : null}
+  </div>
+);
+
+const revealOrBackButton =
+  mix?.reveal_mode && revealedSlots < songs.length && clicked[0] === true ? (
+    <button
+      onClick={handleRevealNext}
+      disabled={!canRevealNext}
+      className="w-full rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv_accent transition hover:bg-purple-500/20 disabled:opacity-50"
+    >
+      REVEAL NEXT
+    </button>
+  ) : (
+    <Link
+      href="/mixlists"
+      className="block w-full rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-center text-xs tracking-widest text-gv_accent transition hover:bg-purple-500/20"
+    >
+      BACK TO MIXLISTS
+    </Link>
+  );
+
   if (loading) {
     return (
       <main className="p-10 text-foreground">
@@ -559,7 +736,8 @@ export default function MixlistPage() {
       className="relative min-h-screen overflow-hidden p-6 text-foreground sm:p-10"
       style={{
         background:
-          typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+          typeof document !== "undefined" &&
+          document.documentElement.classList.contains("dark")
             ? ambientTrack != null
               ? `radial-gradient(circle at 20% 12%, ${ambientTrack.theme.accentColor}22, transparent 45%),
                  radial-gradient(circle at 80% 84%, ${ambientTrack.theme.glowColor}26, transparent 40%),
@@ -577,25 +755,18 @@ export default function MixlistPage() {
       </div>
 
       <div className="relative z-10">
-        <div className="flex items-center justify-between">
-          <div className="flex-1 text-center">
-            <h1 className="text-3xl font-semibold tracking-wide text-gv-accent">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex-1 text-center xl:text-left">
+            <p className="text-xs tracking-[0.25em] text-muted-foreground">
+              MIXLIST
+            </p>
+            <h1 className="gv_accent mt-2 text-3xl font-semibold tracking-wide">
               {mix.title || "Untitled Mixlist"}
             </h1>
           </div>
-          <button
-            onClick={handleCopyLink}
-            className="gv_row gv_accent rounded-full px-4 py-2 text-[11px] tracking-[0.22em] transition xl:hidden"
-          >
-            COPY LINK
-          </button>
+
         </div>
 
-        <div className="mt-3 flex max-w-3xl items-center gap-4">
-          {copyStatus && (
-            <span className="text-xs tracking-widest text-muted-foreground xl:hidden">{copyStatus}</span>
-          )}
-        </div>
 
         {songs.length === 0 && (
           <div className="mt-6 max-w-3xl">
@@ -610,9 +781,15 @@ export default function MixlistPage() {
         <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="space-y-4">
             {displayUiTrack ? (
-              <TrackTransition transitionKey={`${safeSelectedIndex}:${displayUiTrack?.platform ?? "none"}:${displayUiTrack?.url ?? "no-url"}`}>
+              <TrackTransition
+                transitionKey={`${safeSelectedIndex}:${
+                  displayUiTrack?.platform ?? "none"
+                }:${displayUiTrack?.url ?? "no-url"}`}
+              >
                 <TrackView
-                  key={`${displayUiTrack.id}:${displayUiTrack.platform}:${displayUiTrack.url ?? "no-url"}:${autoplayToken}`}
+                  key={`${displayUiTrack.id}:${displayUiTrack.platform}:${
+                    displayUiTrack.url ?? "no-url"
+                  }:${autoplayToken}`}
                   track={displayUiTrack}
                   isActive={true}
                   isRevealed={!activeIsHidden}
@@ -622,6 +799,7 @@ export default function MixlistPage() {
                   onPlay={() => {
                     setHasInteracted(true);
                     setSelectedIndex(safeSelectedIndex);
+
                     if (mix.reveal_mode && clicked[safeSelectedIndex] !== true) {
                       setClicked((prev) => {
                         const next = [...prev];
@@ -633,6 +811,7 @@ export default function MixlistPage() {
                   onReveal={() => {
                     setHasInteracted(true);
                     setSelectedIndex(safeSelectedIndex);
+
                     if (mix.reveal_mode) {
                       setClicked((prev) => {
                         const next = [...prev];
@@ -641,14 +820,18 @@ export default function MixlistPage() {
                       });
                     }
                   }}
-                  disabledReason={activeIsHidden ? "Reveal this song to play it." : null}
+                  disabledReason={
+                    activeIsHidden ? "Reveal this song to play it." : null
+                  }
                   onPrev={() => {
                     setHasInteracted(true);
-                    setSelectedIndex(Math.max(0, safeSelectedIndex - 1))
+                    setSelectedIndex(Math.max(0, safeSelectedIndex - 1));
                   }}
                   onNext={() => {
                     setHasInteracted(true);
-                    setSelectedIndex(Math.min(visibleSongs.length - 1, safeSelectedIndex + 1))
+                    setSelectedIndex(
+                      Math.min(visibleSongs.length - 1, safeSelectedIndex + 1)
+                    );
                   }}
                   disabledPrev={safeSelectedIndex === 0}
                   disabledNext={safeSelectedIndex >= visibleSongs.length - 1}
@@ -660,6 +843,14 @@ export default function MixlistPage() {
               </div>
             )}
 
+            <div className="space-y-4 xl:hidden">
+              {messageCard}
+              {platformSelectorCard}
+              {copyLinkCard}
+              {songNoteCard}
+              {revealOrBackButton}
+            </div>
+
             <div className="gv_row space-y-2 rounded-3xl p-3">
               {visibleSongs.map((s, idx) => {
                 const isHidden = mix.reveal_mode && clicked[idx] !== true;
@@ -670,6 +861,7 @@ export default function MixlistPage() {
                       key={s.id}
                       type="button"
                       onClick={() => {
+                        setHasInteracted(true);
                         setSelectedIndex(idx);
                         setClicked((prev) => {
                           const next = [...prev];
@@ -680,7 +872,9 @@ export default function MixlistPage() {
                       className="gv_row block w-full rounded-2xl px-4 py-4 text-left transition"
                     >
                       <p className="gv_accent text-sm">Song {idx + 1}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Click to reveal</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Click to reveal
+                      </p>
                     </button>
                   );
                 }
@@ -690,15 +884,21 @@ export default function MixlistPage() {
                     key={s.id}
                     role="button"
                     tabIndex={0}
-                    onClick={() => setSelectedIndex(idx)}
+                    onClick={() => {
+                      setHasInteracted(true);
+                      setSelectedIndex(idx);
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
+                        setHasInteracted(true);
                         setSelectedIndex(idx);
                       }
                     }}
                     className={`gv_row rounded-2xl border px-4 py-3 transition ${
-                      idx === safeSelectedIndex ? "ring-1 ring-[color:var(--ring)]" : ""
+                      idx === safeSelectedIndex
+                        ? "ring-1 ring-[color:var(--ring)]"
+                        : ""
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -729,79 +929,22 @@ export default function MixlistPage() {
 
             {showFinishingNote ? (
               <div className="gv_row rounded-2xl p-5">
-                <p className="text-xs tracking-widest text-muted-foreground">FINISHING NOTE</p>
-                <p className="gv_accent mt-3 whitespace-pre-wrap text-sm">{mix.finishing_note}</p>
+                <p className="text-xs tracking-widest text-muted-foreground">
+                  FINISHING NOTE
+                </p>
+                <p className="gv_accent mt-3 whitespace-pre-wrap text-sm">
+                  {mix.finishing_note}
+                </p>
               </div>
             ) : null}
           </div>
-
           <div className="hidden xl:block">
             <div className="sticky top-8 space-y-4">
-              {mix.message ? (
-                <div className="gv_row rounded-2xl p-5">
-                  <p className="text-xs tracking-widest text-muted-foreground">MESSAGE</p>
-                  <p className="gv_accent text-sm">{mix.message}</p>
-                </div>
-              ) : null}
-
-              <div className="gv_row rounded-2xl p-4">
-                <label className="mb-2 block text-xs tracking-[0.22em] text-muted-foreground">
-                  LISTEN ON:
-                </label>
-
-                <select
-                  value={preferredPlatform}
-                  onChange={(e) => setPreferredPlatform(e.target.value as Platform)}
-                  className="w-full appearance-none rounded-full border border-purple-500/40 bg-black/70 px-4 py-3 text-sm text-white outline-none transition hover:bg-black/80"
-                >
-                  <option value="spotify" className="bg-black text-white">Spotify</option>
-                  <option value="youtube" className="bg-black text-white">YouTube</option>
-                  <option value="apple" className="bg-black text-white">Apple Music</option>
-                </select>
-
-                {convertingTrack ? (
-                  <p className="mt-2 text-xs tracking-widest text-muted-foreground">
-                    Converting current track...
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="gv_row rounded-2xl p-4">
-                <button
-                  onClick={handleCopyLink}
-                  className="gv_row gv_accent w-full rounded-full px-4 py-2 text-[11px] tracking-[0.22em] transition"
-                >
-                  COPY LINK
-                </button>
-                {copyStatus ? (
-                  <p className="mt-2 text-center text-xs tracking-widest text-muted-foreground">{copyStatus}</p>
-                ) : null}
-              </div>
-
-              {mix.include_song_notes ? (
-                <div className="gv_row mt-4 rounded-2xl border border-border p-5">
-                  <p className="text-xs tracking-[0.22em] text-muted-foreground">{noteRangeLabel}</p>
-
-                  {!activeSong ? (
-                    <p className="mt-3 text-sm text-muted-foreground">No song selected.</p>
-                  ) : activeIsHidden ? (
-                    <p className="mt-3 text-sm text-muted-foreground">Reveal this song to see the note.</p>
-                  ) : (activeSong.note ?? "").trim().length > 0 ? (
-                    <p className="gv_accent mt-3 whitespace-pre-wrap text-sm">{activeSong.note}</p>
-                  ) : (
-                    <p className="mt-3 text-sm text-muted-foreground">No note for this song.</p>
-                  )}
-                </div>
-              ) : null}
-
-              {mix.reveal_mode && clicked[0] === true && revealedSlots <= songs.length ? (
-                <button
-                  onClick={canRevealNext ? handleRevealNext : () => router.push('/mixlists')}
-                  className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv_accent hover:bg-purple-500/20 transition disabled:opacity-50"
-                >
-                  {canRevealNext ? 'REVEAL NEXT' : 'BACK TO MIXLISTS'}
-                </button>
-              ) : null}
+              {messageCard}
+              {platformSelectorCard}
+              {copyLinkCard}
+              {songNoteCard}
+              {revealOrBackButton}
             </div>
           </div>
         </div>

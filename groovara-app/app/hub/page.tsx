@@ -1,131 +1,125 @@
 import Link from "next/link";
 
+const inProgressMixlists = [
+  "Open your Mixlist Studio.",
+  "Build drafts before sharing.",
+  "Edit songs, notes, and pacing.",
+  "Turn unfinished ideas into sendable Mixlists.",
+];
+
+const sentMixlists = [
+  "View Mixlists you’ve already shared.",
+  "Copy links again when needed.",
+  "Revisit finished listening experiences.",
+  "Check what your recipients will see.",
+];
+
 export default function HubPage() {
   return (
     <main className="gv-paper-bg min-h-screen">
       <div className="gv-paper-content">
-        <div className="mx-auto max-w-6xl px-6 pb-24 pt-36 sm:pt-44 dark:pb-20 dark:pt-28 dark:sm:pt-32">
+        <div className="mx-auto max-w-7xl px-6 pb-24 pt-28 sm:px-8 sm:pt-36 dark:pb-20 dark:pt-28">
           {/* HERO */}
-          <div className="mx-auto max-w-4xl py-24 text-center dark:py-0">
-            {/* Serif headline like earlier screenshot */}
+          <section className="mx-auto max-w-5xl text-center">
             <h1 className="font-serif text-4xl font-medium tracking-tight text-[#2c2a26] dark:font-sans dark:text-foreground sm:text-5xl">
               Welcome back to your listening room.
             </h1>
 
-            {/* Serif italic subhead */}
             <p className="mt-6 font-serif text-2xl italic text-[#6a6358] dark:font-sans dark:text-muted-foreground sm:text-3xl">
               What are you shaping today?
             </p>
+          </section>
 
-            {/* Ornament divider (adds character) */}
-            <div className="mx-auto mt-10 flex max-w-xl items-center justify-center gap-4 text-[#6a6358]/70 dark:text-muted-foreground/70">
-              <div className="h-px flex-1 bg-border/70" />
-              <span className="text-xs tracking-[0.35em]">✦</span>
-              <div className="h-px flex-1 bg-border/70" />
+          {/* MAIN HUB LAYOUT */}
+          <section className="mx-auto mt-16 grid max-w-7xl gap-8 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-center">
+            {/* LEFT MENU */}
+            <aside className="border border-[#cfc6b8] bg-[#f7f1e7]/90 p-8 shadow-[0_4px_14px_rgba(40,30,20,0.20)] dark:border-border/70 dark:bg-card/70 dark:shadow-[0_12px_30px_rgba(0,0,0,0.35)]">
+              <h2 className="text-center text-2xl font-black tracking-[0.22em] text-[#15130f] dark:text-foreground">
+                MIXLISTS
+              </h2>
+
+              <div className="mt-12 space-y-12">
+                <MenuSection
+                  title="IN PROGRESS"
+                  href="/tracklists"
+                  items={inProgressMixlists}
+                  itemHref="/tracklists"
+                />
+
+                <MenuSection
+                  title="SENT"
+                  href="/mixlists"
+                  items={sentMixlists}
+                  itemHref="/mixlists"
+                />
+              </div>
+            </aside>
+
+            {/* CENTER CTA */}
+            <div className="flex justify-center">
+              <Link
+                href="/tracklists"
+                className={[
+                  "group block w-full max-w-3xl border border-[#b8b0a5] bg-[#fffdf3] px-10 py-12",
+                  "shadow-[0_0_0_6px_rgba(90,94,110,0.25),0_10px_22px_rgba(40,30,20,0.28)]",
+                  "transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_0_6px_rgba(124,58,237,0.22),0_16px_34px_rgba(40,30,20,0.32)]",
+                  "dark:border-border/80 dark:bg-card/80 dark:shadow-[0_0_0_6px_rgba(124,58,237,0.18),0_14px_34px_rgba(0,0,0,0.45)]",
+                ].join(" ")}
+              >
+                <p className="text-2xl tracking-[0.32em] text-[#15130f] dark:text-foreground sm:text-3xl">
+                  YOUR STUDIO
+                </p>
+
+                <h2 className="mt-14 max-w-2xl text-3xl font-light leading-tight tracking-[0.18em] text-[#15130f] dark:text-foreground sm:text-4xl">
+                  Start a new Mixlist, continue where you left off, or refine a
+                  draft
+                </h2>
+
+                <p className="mt-16 text-center font-serif text-base italic tracking-[0.35em] text-[#4f463c] transition group-hover:text-purple-700 dark:text-muted-foreground dark:group-hover:text-purple-300">
+                  Shape it your way. No pressure to send.
+                </p>
+              </Link>
             </div>
-          </div>
-
-          {/* CARDS */}
-          <div className="mx-auto mt-10 grid max-w-5xl gap-7 dark:mt-10 dark:gap-6 lg:grid-cols-2">
-            <StudioPanel
-              title="STUDIO"
-              subtitle="Your private listening space."
-              panelClassName="bg-[#f7f2e8] dark:bg-studio-track"
-              primaryHref="/tracklists/new"
-              primaryLabel="+ Start a new Mixlist"
-              primaryDescription="Shape music for yourself."
-              secondaryHref="/tracklists"
-              secondaryLabel="See my Mixlist Concepts →"
-            />
-
-            <StudioPanel
-              title="MIXLISTS"
-              subtitle="Music shared with intention."
-              panelClassName="bg-[#f5efe4] dark:bg-studio-mix"
-              primaryHref="/tracklists"
-              primaryLabel="+ Publish a Mixlist"
-              primaryDescription="Build something meant to travel."
-              secondaryHref="/mixlists"
-              secondaryLabel="See my Mixlists →"
-              microInfo=""
-            />
-          </div>
+          </section>
         </div>
       </div>
     </main>
   );
 }
 
-function StudioPanel({
+function MenuSection({
   title,
-  subtitle,
-  panelClassName,
-  primaryHref,
-  primaryLabel,
-  primaryDescription,
-  secondaryHref,
-  secondaryLabel,
-  microInfo,
+  href,
+  items,
+  itemHref,
 }: {
   title: string;
-  subtitle: string;
-  panelClassName: string;
-  primaryHref: string;
-  primaryLabel: string;
-  primaryDescription: string;
-  secondaryHref: string;
-  secondaryLabel: string;
-  microInfo?: string;
+  href: string;
+  items: string[];
+  itemHref: string;
 }) {
   return (
-    <section
-      className={[
-        "group rounded-2xl border border-[#d2c9ba] bg-card p-10 transition duration-200 ease-out",
-        // “paper stack” shadow (stronger character)
-        "shadow-[0_2px_4px_rgba(40,30,20,0.08),0_14px_32px_rgba(40,30,20,0.18)]",
-        "hover:-translate-y-0.5 hover:shadow-[0_3px_6px_rgba(40,30,20,0.10),0_18px_40px_rgba(40,30,20,0.22)]",
-        "dark:border-border/70 dark:p-8 dark:shadow-[0_10px_28px_rgba(0,0,0,0.34)] dark:hover:-translate-y-1 dark:hover:shadow-[0_18px_34px_rgba(0,0,0,0.44)]",
-        "sm:p-11 dark:sm:p-9",
-        panelClassName,
-      ].join(" ")}
-    >
-      {/* Serif section title like earlier screenshot */}
-      <h2 className="font-serif text-3xl font-medium tracking-wide text-[#2c2a26] transition duration-200 group-hover:font-semibold dark:font-semibold dark:text-foreground dark:group-hover:font-bold sm:text-4xl">
+    <section>
+      <Link
+        href={href}
+        className="text-sm font-black underline underline-offset-2 text-[#15130f] transition hover:text-purple-700 dark:text-foreground dark:hover:text-purple-300"
+      >
         {title}
-      </h2>
+      </Link>
 
-      <p className="mt-2 text-base text-[#6a6358] dark:text-muted-foreground sm:text-lg">
-        {subtitle}
-      </p>
-
-      <div className="mt-7 border-t border-[#d8d0c3] pt-7 dark:border-border/60">
-        {/* Actions stay sans for clarity */}
-        <Link
-          href={primaryHref}
-          className="inline-block font-sans text-3xl font-medium tracking-tight text-[#2c2a26] dark:text-foreground"
-        >
-          {primaryLabel}
-        </Link>
-
-        <p className="mt-2 text-lg text-[#6a6358] dark:text-muted-foreground">
-          {primaryDescription}
-        </p>
-      </div>
-
-      <div className="mt-9 border-t border-[#d8d0c3] pt-6 dark:border-border/60">
-        <Link
-          href={secondaryHref}
-          className="inline-block font-sans text-3xl font-medium tracking-tight text-[#2c2a26] dark:text-foreground"
-        >
-          {secondaryLabel}
-        </Link>
-
-        {microInfo ? (
-          <p className="mt-2 text-sm text-[#6a6358] dark:text-muted-foreground">
-            {microInfo}
-          </p>
-        ) : null}
-      </div>
+      <ul className="mt-5 space-y-3 text-sm text-[#1f1b16] dark:text-muted-foreground">
+        {items.map((item) => (
+          <li key={item} className="flex gap-3">
+            <span className="mt-[0.15rem] text-xs">•</span>
+            <Link
+              href={itemHref}
+              className="transition hover:text-purple-700 dark:hover:text-purple-300"
+            >
+              {item}
+            </Link>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

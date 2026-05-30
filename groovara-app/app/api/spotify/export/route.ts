@@ -5,7 +5,10 @@ import { getValidSpotifyAccessToken } from "@/lib/spotifyServer";
 export const runtime = "nodejs";
 
 
-type ExportBody = { tracklistId: string };
+type ExportBody = {
+  tracklistId?: string;
+  mixlistId?: string;
+};
 
 type SpotifyMe = { id: string };
 type SpotifyCreatePlaylistResponse = {
@@ -84,12 +87,28 @@ if (!user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-  const body = (await req.json()) as ExportBody;
-  if (!body?.tracklistId) {
-    return NextResponse.json({ error: "Missing tracklistId" }, { status: 400 });
-  }
+const body = (await req.json()) as ExportBody;
 
-  // Fetch tracklist title (use your real column names)
+if (!body?.tracklistId && !body?.mixlistId) {
+  return NextResponse.json(
+    { error: "Missing tracklistId or mixlistId" },
+    { status: 400 }
+  );
+}
+
+let playlistSourceTitle = "Mixlist";
+let songs:
+  | {
+      platform?: string | null;
+      track_id?: string | null;
+      position?: number | null;
+      title?: string | null;
+      artist?: string | null;
+      url?: string | null;
+    }[]
+  | null = null;
+
+if (body.tracklistId) {
   const { data: tracklist, error: tlErr } = await supabase
     .from("tracklists")
     .select("id,title,user_id")
@@ -100,31 +119,81 @@ if (!user) {
     return NextResponse.json({ error: "Tracklist not found" }, { status: 404 });
   }
 
-  // Ownership guard
   if (tracklist.user_id !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  
-  const { data: songs, error: sErr } = await supabase
+
+  playlistSourceTitle = tracklist.title ?? "Tracklist";
+
+  const { data, error: sErr } = await supabase
     .from("tracklist_songs")
-    .select("platform,track_id,position,title,artist")
+    .select("platform,track_id,position,title,artist,url")
     .eq("tracklist_id", body.tracklistId)
     .order("position", { ascending: true });
 
   if (sErr) {
-    return NextResponse.json({ error: "Failed to load songs" }, { status: 500 });
-  }
-
-  const spotifyUris = (songs ?? [])
-    .filter((s) => s.platform === "spotify" && typeof s.track_id === "string" && s.track_id.length > 0)
-    .map((s) => toSpotifyUri(s.track_id));
-
-  if (spotifyUris.length === 0) {
     return NextResponse.json(
-      { error: "No Spotify tracks in this tracklist yet." },
-      { status: 400 }
+      { error: "Failed to load songs" },
+      { status: 500 }
     );
   }
+
+  songs = data;
+}
+
+if (body.mixlistId) {
+  const { data: mixlist, error: mixErr } = await supabase
+    .from("mixlists")
+    .select("id,title")
+    .eq("id", body.mixlistId)
+    .maybeSingle();
+
+  if (mixErr || !mixlist) {
+    return NextResponse.json({ error: "Mixlist not found" }, { status: 404 });
+  }
+
+  playlistSourceTitle = mixlist.title ?? "Mixlist";
+
+  const { data, error: sErr } = await supabase
+    .from("mixlist_songs")
+    .select("position,title,artist,url")
+    .eq("mixlist_id", body.mixlistId)
+    .order("position", { ascending: true });
+
+  if (sErr) {
+    return NextResponse.json(
+      { error: "Failed to load mixlist songs" },
+      { status: 500 }
+    );
+  }
+
+  songs = (data ?? []).map((song) => {
+    const url = song.url ?? "";
+    const spotifyMatch = url.match(/spotify\.com\/track\/([a-zA-Z0-9]+)/);
+
+    return {
+      ...song,
+      platform: spotifyMatch ? "spotify" : null,
+      track_id: spotifyMatch?.[1] ?? null,
+    };
+  });
+}
+
+  const spotifyUris = (songs ?? [])
+    .filter(
+      (s): s is typeof s & { track_id: string } =>
+        s.platform === "spotify" &&
+        typeof s.track_id === "string" &&
+        s.track_id.length > 0
+    )
+    .map((s) => toSpotifyUri(s.track_id));
+  
+    if (spotifyUris.length === 0) {
+      return NextResponse.json(
+        { error: "No Spotify tracks found for export." },
+        { status: 400 }
+      );
+    }
 
   const accessToken = await getValidSpotifyAccessToken({
     supabase,
@@ -148,7 +217,7 @@ if (!user) {
   const me = (await meRes.json()) as SpotifyMe;
 
   // Create playlist
-  const playlistName = `Groovara: ${tracklist.title ?? "Tracklist"}`;
+  const playlistName = `Groovara: ${playlistSourceTitle}`;
   const createRes = await fetch(
     `https://api.spotify.com/v1/users/${encodeURIComponent(me.id)}/playlists`,
     {

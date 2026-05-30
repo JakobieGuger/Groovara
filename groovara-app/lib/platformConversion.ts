@@ -8,32 +8,6 @@ export type ConvertibleTrack = {
   url?: string;
 };
 
-function getSearchEndpoint(platform: Platform, query: string) {
-  const encoded = encodeURIComponent(query);
-
-  switch (platform) {
-    case "spotify":
-      return `/api/spotify/search?q=${encoded}`;
-    case "youtube":
-      return `/api/youtube/search?q=${encoded}`;
-    case "apple":
-      return `/api/apple/search?q=${encoded}`;
-    default:
-      return "";
-  }
-}
-
-function normalizeSearchText(value: string) {
-  return value
-    .replace(/\(.*?official.*?\)/gi, "")
-    .replace(/\(.*?audio.*?\)/gi, "")
-    .replace(/\bofficial video\b/gi, "")
-    .replace(/\baudio\b/gi, "")
-    .replace(/\bvevo\b/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 export async function convertTrackPlatform(
   track: ConvertibleTrack,
   preferredPlatform: Platform
@@ -42,36 +16,38 @@ export async function convertTrackPlatform(
     return track;
   }
 
-  const query = `${normalizeSearchText(track.title)} ${normalizeSearchText(track.artist)}`;
-  const endpoint = getSearchEndpoint(preferredPlatform, query);
-
-  if (!endpoint) return track;
-
   try {
-    const response = await fetch(endpoint);
+    const response = await fetch("/api/convert", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        sourcePlatform: track.platform,
+        sourceUrl: track.url ?? "",
+        sourceTitle: track.title,
+        sourceArtist: track.artist,
+        targetPlatform: preferredPlatform,
+      }),
+    });
 
     if (!response.ok) {
       return track;
     }
 
     const data = await response.json();
+    const converted = data?.track;
 
-    const match =
-      data?.tracks?.[0] ??
-      data?.results?.[0] ??
-      data?.items?.[0] ??
-      null;
-
-    if (!match) {
+    if (!converted?.url) {
       return track;
     }
 
     return {
-      title: match.title ?? track.title,
-      artist: match.artist ?? track.artist,
-      platform: preferredPlatform,
-      track_id: match.track_id ?? match.id ?? track.track_id,
-      url: match.url ?? track.url,
+      title: converted.title ?? track.title,
+      artist: converted.artist ?? track.artist,
+      platform: converted.platform ?? preferredPlatform,
+      track_id: converted.track_id ?? track.track_id,
+      url: converted.url ?? track.url,
     };
   } catch (error) {
     console.error("convertTrackPlatform failed", error);
