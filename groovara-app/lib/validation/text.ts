@@ -1,16 +1,14 @@
 export function findUnsupportedCharacter(value: string) {
   for (let i = 0; i < value.length; i++) {
-    const char = value[i];
-    const code = char.charCodeAt(0);
+    const code = value.charCodeAt(i);
 
-    const allowedWhitespace =
-      char === "\n" ||
-      char === "\r" ||
-      char === "\t";
+    // Allow tab, line feed, carriage return.
+    if (code === 9 || code === 10 || code === 13) {
+      continue;
+    }
 
-    const isControlCharacter = code < 32 && !allowedWhitespace;
-
-    if (isControlCharacter) {
+    // Block C0 control characters and DEL.
+    if (code < 32 || code === 127) {
       return {
         index: i,
         code,
@@ -51,4 +49,8 @@ export function validateTextField({
   }
 
   return null;
+}
+
+export function normalizeUserText(value: string) {
+  return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }

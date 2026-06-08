@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { enforceRateLimit } from "@/lib/security/rateLimit";
 import { RATE_LIMITS } from "@/lib/security/rateLimitConfig";
 import { LIMITS } from "@/lib/validation/limits";
-import { validateTextField } from "@/lib/validation/text";
+import { normalizeUserText, validateTextField } from "@/lib/validation/text";
 
 type FeedbackState = {
   error: string;
@@ -16,7 +16,7 @@ export async function submitFeedbackAction(
   _prevState: FeedbackState,
   formData: FormData
 ): Promise<FeedbackState> {
-  const message = String(formData.get("message") || "").trim();
+  const message = normalizeUserText(String(formData.get("message") || "")).trim();
   const category = String(formData.get("category") || "").trim();
   const page = String(formData.get("page") || "").trim();
 
@@ -49,12 +49,12 @@ export async function submitFeedbackAction(
   }
 
   const rateLimit = await enforceRateLimit({
-  action: "submit_feedback",
-  ...RATE_LIMITS.submit_feedback,
-  metadata: { 
-    source: "app/feedback/actions.ts",
-    page,
-    category: category || null,
+    action: "submit_feedback",
+    ...RATE_LIMITS.submit_feedback,
+    metadata: {
+      source: "app/feedback/actions.ts",
+      page,
+      category: category || null,
     },
   });
 

@@ -11,27 +11,59 @@ const MAX = {
   note: 2000,
 };
 
-const hasControlChars = (value: string) => /[\u0000-\u001F\u007F]/.test(value);
+function normalizeUserText(value: string) {
+  return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function hasUnsupportedControlChars(value: string) {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+
+    // Allow normal textarea whitespace:
+    // tab, line feed, carriage return.
+    if (code === 9 || code === 10 || code === 13) {
+      continue;
+    }
+
+    // Block hidden/control characters and DEL.
+    if (code < 32 || code === 127) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 const requiredText = (label: string, max: number) =>
   z
     .string()
-    .trim()
-    .min(1, `${label} is required`)
-    .max(max, `${label} must be at most ${max} characters`)
-    .refine((v) => !hasControlChars(v), `${label} contains invalid control characters`);
+    .transform((value) => normalizeUserText(value).trim())
+    .pipe(
+      z
+        .string()
+        .min(1, `${label} is required`)
+        .max(max, `${label} must be at most ${max} characters`)
+        .refine(
+          (value) => !hasUnsupportedControlChars(value),
+          `${label} contains invalid control characters`
+        )
+    );
 
 const optionalText = (label: string, max: number) =>
   z.preprocess(
     (value) => {
       if (typeof value !== "string") return value;
-      const trimmed = value.trim();
-      return trimmed === "" ? null : trimmed;
+
+      const normalized = normalizeUserText(value);
+      return normalized.trim() === "" ? null : normalized;
     },
     z
       .string()
       .max(max, `${label} must be at most ${max} characters`)
-      .refine((v) => !hasControlChars(v), `${label} contains invalid control characters`)
+      .refine(
+        (value) => !hasUnsupportedControlChars(value),
+        `${label} contains invalid control characters`
+      )
       .nullable()
   );
 

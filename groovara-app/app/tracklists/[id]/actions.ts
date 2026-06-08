@@ -11,7 +11,8 @@ import { enforceRateLimit } from "@/lib/security/rateLimit";
 import { RATE_LIMITS } from "@/lib/security/rateLimitConfig";
 import { writeAuditLog } from "@/lib/security/auditLog";
 import { LIMITS } from "@/lib/validation/limits";
-import { validateTextField } from "@/lib/validation/text";
+import { validateTextField, normalizeUserText } from "@/lib/validation/text";
+
 
 type ValidationResult =
   | {
@@ -26,12 +27,31 @@ type ValidationResult =
 type OkResult = { ok: true };
 type MixlistActionResult = { ok: true; mixlistId: string } | ValidationResult;
 
-function validationFailure(error: z.ZodError): ValidationResult {
+function validationFailure(error: z.ZodError | string): ValidationResult {
+  if (typeof error === "string") {
+    return {
+      ok: false,
+      type: "validation",
+      message: error,
+      fieldErrors: {},
+      formErrors: [error],
+    };
+  }
+
   const flattened = error.flatten();
+  const firstFieldError = Object.values(flattened.fieldErrors)
+    .flat()
+    .find((message): message is string => typeof message === "string");
+
+  const message =
+    flattened.formErrors[0] ??
+    firstFieldError ??
+    "Please check the form and try again.";
+
   return {
     ok: false,
     type: "validation",
-    message: "string",
+    message,
     fieldErrors: flattened.fieldErrors,
     formErrors: flattened.formErrors,
   };
@@ -147,8 +167,8 @@ const saveSingleNoteSchema = z.object({
   note: z.preprocess(
     (value) => {
       if (typeof value !== "string") return value;
-      const trimmed = value.trim();
-      return trimmed === "" ? null : trimmed;
+      const normalized = normalizeUserText(value);
+      return normalized.trim() === "" ? null : normalized;
     },
     z.string().max(
       LIMITS.songNote,
@@ -163,8 +183,8 @@ const multiNoteSchema = z.object({
   note: z.preprocess(
     (value) => {
       if (typeof value !== "string") return value;
-      const trimmed = value.trim();
-      return trimmed === "" ? null : trimmed;
+      const normalized = normalizeUserText(value);
+      return normalized.trim() === "" ? null : normalized;
     },
     z.string().max(
       LIMITS.songNote,
@@ -185,6 +205,8 @@ export async function createMixlistFromTracklistAction(
   }
 
   const input: CreateMixlistFromTracklistInput = parsed.data;
+  const normalizedMessage = normalizeUserText(input.message ?? "");
+  const normalizedFinishingNote = normalizeUserText(input.finishing_note ?? "");
   const { supabase, user, error: authError } = await getAuthedUser();
 
   if (authError || !user) {
@@ -230,10 +252,11 @@ export async function createMixlistFromTracklistAction(
       owner_user_id: user.id,
       title: input.title,
       source_tracklist_id: input.source_tracklist_id,
-      message: input.message,
+      message: normalizedMessage.trim() === "" ? null : normalizedMessage,
       reveal_mode: input.reveal_mode,
       is_public: input.is_public,
-      finishing_note: input.finishing_note,
+      finishing_note:
+        normalizedFinishingNote.trim() === "" ? null : normalizedFinishingNote,
       include_song_notes: input.include_song_notes,
     })
     .select("id")
@@ -273,7 +296,7 @@ export async function createMixlistFromTracklistAction(
       album: s.album,
       version: null,
       url: s.url,
-      note: s.note,
+      note: s.note ? normalizeUserText(s.note) : null,
     }));
 
   const { error: snapErr } = await supabase.from("mixlist_songs").insert(payload);
@@ -529,8 +552,10 @@ export async function saveTracklistSongNoteAction(rawInput: unknown): Promise<Ok
   }
 
   const { tracklistId, songId, note } = parsed.data;
+  const normalizedNote = normalizeUserText(note ?? "");
+  const noteToSave = normalizedNote.trim() === "" ? null : normalizedNote;
+
   const { supabase, user, error: authError } = await getAuthedUser();
-  
 
   if (authError || !user) {
     return { ok: false, type: "auth", message: "Not authenticated." };
@@ -571,8 +596,6 @@ export async function saveTracklistSongNoteAction(rawInput: unknown): Promise<Ok
     return { ok: false, type: "not_found", message: "Song not found in this tracklist." };
   }
 
-  const songNote = note ?? "";
-
   const songLabel =
     typeof song.position === "number" && song.title
       ? `Song #${song.position + 1} “${song.title}” note`
@@ -581,25 +604,20 @@ export async function saveTracklistSongNoteAction(rawInput: unknown): Promise<Ok
         : "Song note";
 
   const noteValidationError = validateTextField({
-    value: songNote,
+    value: normalizedNote,
     label: songLabel,
     max: LIMITS.songNote,
   });
 
   if (noteValidationError) {
-    return {
-      ok: false,
-      type: "validation",
-      message: noteValidationError,
-      fieldErrors: {},
-      formErrors: [noteValidationError],
-    };
+    return validationFailure(noteValidationError);
   }
 
   const { error } = await supabase
     .from("tracklist_songs")
-    .update({ note })
-    .eq("id", songId);
+    .update({ note: noteToSave })
+    .eq("id", songId)
+    .eq("tracklist_id", tracklistId);
 
   if (error) {
     return { ok: false, type: "db", message: error.message ?? "Failed to save note." };
@@ -627,6 +645,9 @@ export async function applyTracklistNoteToSelectedAction(rawInput: unknown): Pro
   }
 
   const { tracklistId, songIds, note } = parsed.data;
+  const normalizedNote = normalizeUserText(note ?? "");
+  const noteToSave = normalizedNote.trim() === "" ? null : normalizedNote;
+
   const { supabase, user, error: authError } = await getAuthedUser();
 
   if (authError || !user) {
@@ -651,8 +672,6 @@ export async function applyTracklistNoteToSelectedAction(rawInput: unknown): Pro
     },
   });
 
-  
-
   if (!rateLimit.ok) {
     return {
       ok: false,
@@ -676,8 +695,6 @@ export async function applyTracklistNoteToSelectedAction(rawInput: unknown): Pro
     return { ok: false, type: "not_found", message: "One or more selected songs are invalid." };
   }
 
-  const bulkNote = note ?? "";
-
   for (const row of rows) {
     const rowLabel =
       typeof row.position === "number" && row.title
@@ -687,25 +704,20 @@ export async function applyTracklistNoteToSelectedAction(rawInput: unknown): Pro
           : "Selected song note";
 
     const noteValidationError = validateTextField({
-      value: bulkNote,
+      value: normalizedNote,
       label: rowLabel,
       max: LIMITS.songNote,
     });
 
     if (noteValidationError) {
-      return {
-        ok: false,
-        type: "validation",
-        message: noteValidationError,
-        fieldErrors: {},
-        formErrors: [noteValidationError],
-      };
+      return validationFailure(noteValidationError);
     }
   }
 
   const { error } = await supabase
     .from("tracklist_songs")
-    .update({ note })
+    .update({ note: noteToSave })
+    .eq("tracklist_id", tracklistId)
     .in("id", songIds);
 
   if (error) {
