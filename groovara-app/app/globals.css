@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
 /*
   Groovara theme tokens
   - next-themes controls html.light / html.dark
@@ -174,7 +175,13 @@ html.dark .gv-panel-shadow {
 
 .gv-nav-surface {
   position: relative; /* needed for ::after grain layer */
+    overflow: visible;
+    background: color-mix(in srgb, #ecdfca 88%, white 12%);
+    border-bottom: 1px solid rgba(216, 207, 191, 0.78);
+    box-shadow: 0 2px 18px rgba(64, 47, 31, 0.06);
+    backdrop-filter: blur(10px);
 }
+
 
 /* light mode: grainy cream strip + hairline edge */
 html.light .gv-nav-surface {
@@ -391,4 +398,34 @@ html.dark .gv-row-text {
 
 html.dark .gv-row-subtext {
   color: rgba(255, 255, 255, 0.62); /* dark mode: softer gray */
+}
+
+/* -------------------------------
+   GROOVARA NAV CORNER RINGS
+--------------------------------- */
+
+.gv-nav-corner-rings {
+  position: absolute;
+  pointer-events: none;
+  right: -6rem;
+  top: -6rem;
+  display: none;
+  width: 14rem;
+  height: 14rem;
+  background-image: url("/groovara-rings-mask-light.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 1;
+  user-select: none;
+}
+
+html.dark .gv-nav-corner-rings {
+  background-image: url("/groovara-rings-mask-dark.png");
+}
+
+@media (min-width: 768px) {
+  .gv-nav-corner-rings {
+    display: block;
+  }
 }

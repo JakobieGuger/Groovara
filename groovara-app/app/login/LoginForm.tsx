@@ -92,6 +92,34 @@ export default function LoginForm({
           CONTINUE WITH GOOGLE
         </button>
 
+        <p className="mt-4 text-center text-[11px] leading-5 text-gray-500">
+          By signing in, you agree to Groovara&apos;s{" "}
+          <a
+            href="/terms"
+            className="text-purple-300 underline underline-offset-4 hover:text-purple-200"
+          >
+            Terms of Use
+          </a>{" "}
+          and{" "}
+          <a
+            href="/privacy"
+            className="text-purple-300 underline underline-offset-4 hover:text-purple-200"
+          >
+            Privacy Policy
+          </a>
+          . Groovara uses YouTube API Services, and YouTube-powered features are
+          also subject to the{" "}
+          <a
+            href="https://www.youtube.com/t/terms"
+            target="_blank"
+            rel="noreferrer"
+            className="text-purple-300 underline underline-offset-4 hover:text-purple-200"
+          >
+            YouTube Terms of Service
+          </a>
+          .
+        </p>
+
         <p className="mt-6 text-center text-sm text-gray-400">
           Don&apos;t have an account?{" "}
           <a

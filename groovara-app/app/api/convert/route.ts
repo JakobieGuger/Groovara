@@ -42,6 +42,20 @@ function normalizeSearchText(value: string) {
     .trim();
 }
 
+function isOlderThanDays(value: string | null | undefined, days: number) {
+  if (!value) return true;
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return true;
+  return Date.now() - time >= days * 24 * 60 * 60 * 1000;
+}
+
+function conversionInvolvesYouTube(row: {
+  source_platform: string;
+  target_platform: string;
+}) {
+  return row.source_platform === "youtube" || row.target_platform === "youtube";
+}
+
 function getSearchPath(platform: Platform, query: string) {
   const encoded = encodeURIComponent(query);
 
@@ -66,6 +80,7 @@ function buildCacheResponse(row: {
   target_url: string | null;
   target_track_id: string | null;
   status: string;
+  updated_at?: string | null;
 }) {
   return {
     cached: true,
@@ -124,7 +139,7 @@ export async function POST(req: Request) {
     const { data: cachedRow, error: cacheError } = await admin
       .from("platform_conversions")
       .select(
-        "source_platform,source_url,source_title,source_artist,target_platform,target_title,target_artist,target_url,target_track_id,status"
+        "source_platform,source_url,source_title,source_artist,target_platform,target_title,target_artist,target_url,target_track_id,status,updated_at"
       )
       .eq("source_url", sourceUrl)
       .eq("target_platform", targetPlatform)
@@ -135,10 +150,25 @@ export async function POST(req: Request) {
     }
 
     if (cachedRow) {
-      return NextResponse.json(buildCacheResponse(cachedRow));
+      const staleYouTubeCache =
+        conversionInvolvesYouTube(cachedRow) &&
+        isOlderThanDays(cachedRow.updated_at, 30);
+
+      if (!staleYouTubeCache) {
+        return NextResponse.json(buildCacheResponse(cachedRow));
+      }
+
+      // YouTube API Data must be refreshed or deleted after 30 days.
+      // If a cached conversion involves YouTube and is stale, ignore it and
+      // re-run the target search so the cache is updated below.
+      console.info("Refreshing stale YouTube platform conversion cache", {
+        sourcePlatform,
+        targetPlatform,
+        sourceUrl,
+      });
     }
 
-    // 2. No cache hit, so search the requested target platform.
+    // 2. No usable cache hit, so search the requested target platform.
     const query = `${normalizeSearchText(sourceTitle)} ${normalizeSearchText(
       sourceArtist
     )}`.trim();

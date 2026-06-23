@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+const POLICY_VERSION = "youtube-compliance-2026-06";
+
 type SignupState = {
   error: string;
   success: string;
@@ -18,9 +20,17 @@ export async function signupAction(
   const confirm = String(formData.get("confirmPassword") || "");
   const betaCode = String(formData.get("betaCode") || "").trim();
   const next = String(formData.get("next") || "/hub");
+  const acceptedPolicies = formData.get("acceptedPolicies") === "on";
 
   if (!email || !password || !confirm || !betaCode) {
     return { error: "All fields are required.", success: "" };
+  }
+
+  if (!acceptedPolicies) {
+    return {
+      error: "You must agree to Groovara's Terms of Use and Privacy Policy.",
+      success: "",
+    };
   }
 
   if (password !== confirm) {
@@ -112,6 +122,26 @@ export async function signupAction(
   if (updateError) {
     return {
       error: "Account created, but beta code usage could not be updated.",
+      success: "",
+    };
+  }
+
+  const { error: acceptanceError } = await admin
+    .from("user_policy_acceptances")
+    .upsert(
+      {
+        user_id: userId,
+        terms_version: POLICY_VERSION,
+        privacy_version: POLICY_VERSION,
+        accepted_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    );
+
+  if (acceptanceError) {
+    return {
+      error:
+        "Account created, but policy acceptance could not be saved. Please contact support or try signing in again.",
       success: "",
     };
   }

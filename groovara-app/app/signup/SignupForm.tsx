@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import { signupAction } from "./actions";
@@ -66,6 +67,44 @@ export default function SignupPage() {
               placeholder="Enter your beta code"
             />
           </div>
+
+          <label className="flex gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-xs leading-5 text-gray-300">
+            <input
+              name="acceptedPolicies"
+              type="checkbox"
+              required
+              className="mt-1 h-4 w-4 shrink-0 accent-[#57577F]"
+            />
+            <span>
+              I agree to Groovara&apos;s{" "}
+              <Link
+                href="/terms"
+                target="_blank"
+                className="text-purple-300 underline underline-offset-4 hover:text-purple-200"
+              >
+                Terms of Use
+              </Link>{" "}
+              and{" "}
+              <Link
+                href="/privacy"
+                target="_blank"
+                className="text-purple-300 underline underline-offset-4 hover:text-purple-200"
+              >
+                Privacy Policy
+              </Link>
+              . Groovara uses YouTube API Services, and YouTube-powered features
+              are also subject to the{" "}
+              <a
+                href="https://www.youtube.com/t/terms"
+                target="_blank"
+                rel="noreferrer"
+                className="text-purple-300 underline underline-offset-4 hover:text-purple-200"
+              >
+                YouTube Terms of Service
+              </a>
+              .
+            </span>
+          </label>
 
           {state?.error ? (
             <p className="text-sm text-red-400">{state.error}</p>

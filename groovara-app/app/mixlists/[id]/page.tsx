@@ -48,6 +48,129 @@ function getPlatform(url: string): UiTrack["platform"] {
   return "other";
 }
 
+function extractYouTubeId(rawUrl: string | null | undefined): string | null {
+  if (!rawUrl) return null;
+
+  const trimmed = rawUrl.trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(trimmed)) return trimmed;
+
+  try {
+    const parsed = new URL(trimmed);
+    const host = parsed.hostname.toLowerCase();
+
+    if (host === "youtu.be" || host === "www.youtu.be") {
+      const id = parsed.pathname.split("/").filter(Boolean)[0] ?? null;
+      return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+    }
+
+    if (
+      host === "youtube.com" ||
+      host === "www.youtube.com" ||
+      host === "m.youtube.com"
+    ) {
+      const watchId = parsed.searchParams.get("v");
+      if (watchId && /^[A-Za-z0-9_-]{11}$/.test(watchId)) return watchId;
+
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      const shortsIndex = parts.indexOf("shorts");
+      if (shortsIndex !== -1) {
+        const id = parts[shortsIndex + 1] ?? null;
+        return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+      }
+
+      const embedIndex = parts.indexOf("embed");
+      if (embedIndex !== -1) {
+        const id = parts[embedIndex + 1] ?? null;
+        return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+type YouTubeRefreshRow = {
+  video_id: string;
+  title: string | null;
+  channel_title: string | null;
+  thumbnail_url: string | null;
+  youtube_url: string | null;
+  available: boolean;
+  last_refreshed_at: string | null;
+};
+
+async function refreshYouTubeSongsForCompliance(list: MixSong[]) {
+  const songRefs = list
+    .map((song) => {
+      const videoId = extractYouTubeId(song.url);
+      if (!videoId) return null;
+
+      return {
+        table: "mixlist_songs",
+        id: song.id,
+        url: song.url,
+      };
+    })
+    .filter(
+      (ref): ref is { table: "mixlist_songs"; id: string; url: string } =>
+        ref !== null
+    );
+
+  if (songRefs.length === 0) return list;
+
+  try {
+    const response = await fetch("/api/youtube/refresh", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ songRefs }),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error("YouTube metadata refresh failed", detail.slice(0, 500));
+      return list;
+    }
+
+    const data = (await response.json()) as { items?: YouTubeRefreshRow[] };
+    const byVideoId = new Map(
+      (data.items ?? []).map((item) => [item.video_id, item])
+    );
+
+    return list.map((song) => {
+      const videoId = extractYouTubeId(song.url);
+      if (!videoId) return song;
+
+      const fresh = byVideoId.get(videoId);
+      if (!fresh) return song;
+
+      if (!fresh.available) {
+        return {
+          ...song,
+          title: "YouTube video unavailable",
+          artist: "YouTube",
+          album: "YouTube",
+          url: fresh.youtube_url ?? song.url,
+        };
+      }
+
+      return {
+        ...song,
+        title: fresh.title ?? song.title,
+        artist: fresh.channel_title ?? song.artist,
+        album: song.album ?? "YouTube",
+        url: fresh.youtube_url ?? song.url,
+      };
+    });
+  } catch (error) {
+    console.error("YouTube metadata refresh crashed", error);
+    return list;
+  }
+}
+
 function toUiTrack(song: MixSong, index: number): UiTrack {
   const theme = createTheme(`${song.id}:${song.title}:${song.artist}:${index}`, song.title, song.artist);
 
@@ -173,6 +296,8 @@ export default function MixlistPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     const run = async () => {
       setLoading(true);
       setErr(null);
@@ -184,6 +309,8 @@ export default function MixlistPage() {
         .select("id,title,message,finishing_note,reveal_mode,include_song_notes")
         .eq("id", mixlistId)
         .maybeSingle();
+
+      if (cancelled) return;
 
       if (mixErr) {
         setErr("Couldn't load this mixlist. Please try again.");
@@ -206,6 +333,8 @@ export default function MixlistPage() {
         .eq("mixlist_id", mixlistId)
         .order("position", { ascending: true });
 
+      if (cancelled) return;
+
       if (songErr) {
         setErr("Couldn't load songs for this mixlist. Please try again.");
         setLoading(false);
@@ -220,9 +349,20 @@ export default function MixlistPage() {
       setSelectedIndex(0);
 
       setLoading(false);
+
+      // Compliance refresh: YouTube API Data stored for songs is refreshed,
+      // updated, or marked unavailable after it becomes stale.
+      const refreshedList = await refreshYouTubeSongsForCompliance(list);
+      if (!cancelled) {
+        setSongs(refreshedList);
+      }
     };
 
     void run();
+
+    return () => {
+      cancelled = true;
+    };
   }, [mixlistId]);
 
   useEffect(() => {

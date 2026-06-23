@@ -48,9 +48,9 @@ type UserSettings = {
 };
 
 const PLATFORM_ICONS: Record<string, string> = {
-  spotify: "/icons/spotify.png",
-  youtube: "/icons/youtube.png",
-  apple: "/icons/apple.png",
+  spotify: "/icons/spotify24.png",
+  youtube: "/icons/youtube24.png",
+  apple: "/icons/apple24.png",
 };
 
 function getActionError(result: {
@@ -68,6 +68,135 @@ function getActionError(result: {
   }
 
   return result.message ?? "Something went wrong.";
+}
+
+
+function extractYouTubeId(rawUrl: string | null | undefined): string | null {
+  if (!rawUrl) return null;
+
+  const trimmed = rawUrl.trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(trimmed)) return trimmed;
+
+  try {
+    const parsed = new URL(trimmed);
+    const host = parsed.hostname.toLowerCase();
+
+    if (host === "youtu.be" || host === "www.youtu.be") {
+      const id = parsed.pathname.split("/").filter(Boolean)[0] ?? null;
+      return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+    }
+
+    if (
+      host === "youtube.com" ||
+      host === "www.youtube.com" ||
+      host === "m.youtube.com"
+    ) {
+      const watchId = parsed.searchParams.get("v");
+      if (watchId && /^[A-Za-z0-9_-]{11}$/.test(watchId)) return watchId;
+
+      const parts = parsed.pathname.split("/").filter(Boolean);
+
+      const shortsIndex = parts.indexOf("shorts");
+      if (shortsIndex !== -1) {
+        const id = parts[shortsIndex + 1] ?? null;
+        return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+      }
+
+      const embedIndex = parts.indexOf("embed");
+      if (embedIndex !== -1) {
+        const id = parts[embedIndex + 1] ?? null;
+        return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+type YouTubeRefreshRow = {
+  video_id: string;
+  title: string | null;
+  channel_title: string | null;
+  thumbnail_url: string | null;
+  youtube_url: string | null;
+  available: boolean;
+  last_refreshed_at: string | null;
+};
+
+async function refreshTracklistYouTubeSongsForCompliance(list: TrackSong[]) {
+  const songRefs = list
+    .map((song) => {
+      const videoId = extractYouTubeId(song.url);
+      if (!videoId) return null;
+
+      return {
+        table: "tracklist_songs",
+        id: song.id,
+        url: song.url,
+      };
+    })
+    .filter(
+      (ref): ref is { table: "tracklist_songs"; id: string; url: string } =>
+        ref !== null
+    );
+
+  if (songRefs.length === 0) return list;
+
+  try {
+    const response = await fetch("/api/youtube/refresh", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ songRefs }),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error("YouTube metadata refresh failed", detail.slice(0, 500));
+      return list;
+    }
+
+    const data = (await response.json()) as { items?: YouTubeRefreshRow[] };
+    const byVideoId = new Map(
+      (data.items ?? []).map((item) => [item.video_id, item])
+    );
+
+    return list.map((song) => {
+      const videoId = extractYouTubeId(song.url);
+      if (!videoId) return song;
+
+      const fresh = byVideoId.get(videoId);
+      if (!fresh) return song;
+
+      if (!fresh.available) {
+        return {
+          ...song,
+          title: "YouTube video unavailable",
+          artist: "YouTube",
+          album: "YouTube",
+          url: fresh.youtube_url ?? song.url,
+          platform: song.platform ?? "youtube",
+          track_id: song.track_id ?? videoId,
+        };
+      }
+
+      return {
+        ...song,
+        title: fresh.title ?? song.title,
+        artist: fresh.channel_title ?? song.artist,
+        album: song.album ?? "YouTube",
+        url: fresh.youtube_url ?? song.url,
+        platform: song.platform ?? "youtube",
+        track_id: song.track_id ?? videoId,
+      };
+    });
+  } catch (error) {
+    console.error("YouTube metadata refresh crashed", error);
+    return list;
+  }
 }
 
 export default function TracklistDetailPage() {
@@ -186,6 +315,11 @@ export default function TracklistDetailPage() {
     const list = (data ?? []) as TrackSong[];
     setSongs(list);
     seedNoteDrafts(list);
+
+    // Compliance refresh: YouTube API Data stored for tracklist songs is
+    // refreshed, updated, or marked unavailable after it becomes stale.
+    const refreshedList = await refreshTracklistYouTubeSongsForCompliance(list);
+    setSongs(refreshedList);
   };
 
   useEffect(() => {
@@ -247,6 +381,11 @@ export default function TracklistDetailPage() {
         const list = (songData ?? []) as TrackSong[];
         setSongs(list);
         seedNoteDrafts(list);
+
+        // Compliance refresh: YouTube API Data stored for tracklist songs is
+        // refreshed, updated, or marked unavailable after it becomes stale.
+        const refreshedList = await refreshTracklistYouTubeSongsForCompliance(list);
+        setSongs(refreshedList);
       }
 
       setLoading(false);
@@ -829,8 +968,8 @@ export default function TracklistDetailPage() {
                           <Image
                             src={PLATFORM_ICONS[s.platform]}
                             alt={s.platform}
-                            width={16}
-                            height={16}
+                            width={24}
+                            height={24}
                             className="opacity-80 flex-shrink-0"
                           />
                         ) : null}
