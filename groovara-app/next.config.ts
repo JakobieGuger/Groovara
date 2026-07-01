@@ -41,6 +41,27 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+    async rewrites() {
+    return [
+      {
+        source: "/gv-collect/static/:path*",
+        destination: "https://us-assets.i.posthog.com/static/:path*",
+      },
+      {
+        source: "/gv-collect/array/:path*",
+        destination: "https://us-assets.i.posthog.com/array/:path*",
+      },
+      {
+        source: "/gv-collect/:path*",
+        destination: "https://us.i.posthog.com/:path*",
+      },
+    ];
+  },
+
+  skipTrailingSlashRedirect: true,
 };
+
+module.exports = nextConfig;
+
 
 export default nextConfig;

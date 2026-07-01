@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { trackEvent } from "@/lib/analytics";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabaseClient";
 import { useParams, useRouter } from "next/navigation";
@@ -394,6 +395,12 @@ export default function TracklistDetailPage() {
     void run();
   }, [id, router]);
 
+  useEffect(() => {
+    trackEvent("opened_studio", {
+      tracklist_id: id,
+    });
+  }, [id]);
+
   const save = async () => {
     if (!item) return;
 
@@ -684,6 +691,8 @@ export default function TracklistDetailPage() {
         })),
     });
 
+
+
     setCreatingMix(false);
 
     if (!result.ok) {
@@ -692,6 +701,12 @@ export default function TracklistDetailPage() {
     }
 
     router.push(`/mixlists/${result.mixlistId}`);
+    
+    trackEvent("created_mixlist", {
+      tracklist_id: String(id),
+      mixlist_id: String(result.mixlistId),
+      song_count: songs.length,
+    });
   };
 
   if (loading) {

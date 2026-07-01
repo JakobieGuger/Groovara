@@ -203,6 +203,13 @@ export default function PrivacyPage() {
               traffic patterns, product functionality, and service reliability.
             </p>
             <p>
+              Groovara uses PostHog to understand product usage, improve features, 
+              diagnose issues, and measure user flows such as Studio usage, Mixlist creation, 
+              shared Mixlist openings, and feature engagement. 
+              PostHog may process usage events, device/browser information, page views, session information, and interaction data. 
+              Groovara does not use PostHog to sell user data.
+            </p>
+            <p>
               Analytics information is used to improve the user experience,
               identify technical issues, and guide product development.
             </p>

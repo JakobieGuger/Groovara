@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { trackEvent } from "@/lib/analytics";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import InlineNotice from "../../../lib/InlineNotice";
@@ -191,7 +192,8 @@ function toUiTrack(song: MixSong, index: number): UiTrack {
 
 export default function MixlistPage() {
   const params = useParams<{ id: string }>();
-  const mixlistId = params.id;
+  const id = params.id;
+  const mixlistId = String(id);
   
 
   const [mix, setMix] = useState<Mixlist | null>(null);
@@ -633,6 +635,8 @@ export default function MixlistPage() {
   if (!activeSong) return;
   if (activeIsHidden) return;
 
+  
+
   setAutoplayToken((v) => v + 1);
   }, [safeSelectedIndex, displayUiTrack?.url, hasInteracted, activeSong, activeIsHidden]);
 
@@ -685,6 +689,12 @@ export default function MixlistPage() {
     const max = Math.max(...matches);
     return `SONGS #${min}-#${max} NOTE`;
   }, [activeSong, safeSelectedIndex, songs]);
+
+  useEffect(() => {
+    trackEvent("opened_mixlist", {
+      mixlist_id: mixlistId,
+    });
+  }, [mixlistId]);
 
   const songNoteCard = mix?.include_song_notes ? (
     <div className="gv_row rounded-2xl border border-border p-5">
