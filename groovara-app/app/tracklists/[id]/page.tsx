@@ -63,14 +63,15 @@ function getActionError(result: {
   if (result.type === "validation") {
     return (
       result.formErrors?.[0] ??
-      Object.values(result.fieldErrors ?? {}).flat().find(Boolean) ??
+      Object.values(result.fieldErrors ?? {})
+        .flat()
+        .find(Boolean) ??
       "Invalid input."
     );
   }
 
   return result.message ?? "Something went wrong.";
 }
-
 
 function extractYouTubeId(rawUrl: string | null | undefined): string | null {
   if (!rawUrl) return null;
@@ -140,7 +141,7 @@ async function refreshTracklistYouTubeSongsForCompliance(list: TrackSong[]) {
     })
     .filter(
       (ref): ref is { table: "tracklist_songs"; id: string; url: string } =>
-        ref !== null
+        ref !== null,
     );
 
   if (songRefs.length === 0) return list;
@@ -162,7 +163,7 @@ async function refreshTracklistYouTubeSongsForCompliance(list: TrackSong[]) {
 
     const data = (await response.json()) as { items?: YouTubeRefreshRow[] };
     const byVideoId = new Map(
-      (data.items ?? []).map((item) => [item.video_id, item])
+      (data.items ?? []).map((item) => [item.video_id, item]),
     );
 
     return list.map((song) => {
@@ -233,7 +234,9 @@ export default function TracklistDetailPage() {
   const [songs, setSongs] = useState<TrackSong[]>([]);
 
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
-  const [noteDraftById, setNoteDraftById] = useState<Record<string, string>>({});
+  const [noteDraftById, setNoteDraftById] = useState<Record<string, string>>(
+    {},
+  );
   const [savingNoteId, setSavingNoteId] = useState<string | null>(null);
 
   const [multiNoteMode, setMultiNoteMode] = useState(false);
@@ -245,7 +248,7 @@ export default function TracklistDetailPage() {
 
   const SONG_NOTE_LIMIT = 2000;
   const MIXLIST_MESSAGE_LIMIT = 1000;
-  const FINISHING_NOTE_LIMIT = 2000;  
+  const FINISHING_NOTE_LIMIT = 2000;
 
   const busy =
     saving ||
@@ -304,12 +307,16 @@ export default function TracklistDetailPage() {
   const loadSongs = async () => {
     const { data, error } = await supabase
       .from("tracklist_songs")
-      .select("id,tracklist_id,position,title,artist,album,url,note,platform,track_id")
+      .select(
+        "id,tracklist_id,position,title,artist,album,url,note,platform,track_id",
+      )
       .eq("tracklist_id", id)
       .order("position", { ascending: true });
 
     if (error) {
-      setPageError("Failed to load songs. Check your connection and try Refresh.");
+      setPageError(
+        "Failed to load songs. Check your connection and try Refresh.",
+      );
       return;
     }
 
@@ -331,7 +338,9 @@ export default function TracklistDetailPage() {
 
       const { data, error } = await supabase
         .from("user_settings")
-        .select("default_reveal_mode,default_include_song_notes,default_is_public")
+        .select(
+          "default_reveal_mode,default_include_song_notes,default_is_public",
+        )
         .eq("user_id", uid)
         .maybeSingle();
 
@@ -370,12 +379,16 @@ export default function TracklistDetailPage() {
 
       const { data: songData, error: songError } = await supabase
         .from("tracklist_songs")
-        .select("id,tracklist_id,position,title,artist,album,url,note,platform,track_id")
+        .select(
+          "id,tracklist_id,position,title,artist,album,url,note,platform,track_id",
+        )
         .eq("tracklist_id", id)
         .order("position", { ascending: true });
 
       if (songError) {
-        setPageError("Failed to load songs. Check your connection and try Refresh.");
+        setPageError(
+          "Failed to load songs. Check your connection and try Refresh.",
+        );
         setSongs([]);
         seedNoteDrafts([]);
       } else {
@@ -385,7 +398,8 @@ export default function TracklistDetailPage() {
 
         // Compliance refresh: YouTube API Data stored for tracklist songs is
         // refreshed, updated, or marked unavailable after it becomes stale.
-        const refreshedList = await refreshTracklistYouTubeSongsForCompliance(list);
+        const refreshedList =
+          await refreshTracklistYouTubeSongsForCompliance(list);
         setSongs(refreshedList);
       }
 
@@ -397,7 +411,8 @@ export default function TracklistDetailPage() {
 
   useEffect(() => {
     trackEvent("opened_studio", {
-      tracklist_id: id,
+      tracklist_id: String(id),
+      source: "tracklist_editor",
     });
   }, [id]);
 
@@ -405,6 +420,8 @@ export default function TracklistDetailPage() {
     if (!item) return;
 
     setSaving(true);
+    setPageError(null);
+    setPageInfo(null);
 
     const result = await updateTracklistMetadataAction({
       tracklistId: String(id),
@@ -412,10 +429,31 @@ export default function TracklistDetailPage() {
       description,
     });
 
+    if (!result.ok) {
+      setSaving(false);
+      setPageError(getActionError(result));
+      return;
+    }
+
+    const savedAt = new Date().toISOString();
+    const { error: draftStatusError } = await supabase
+      .from("tracklists")
+      .update({
+        status: "draft",
+        updated_at: savedAt,
+      })
+      .eq("id", String(id));
+
     setSaving(false);
 
-    if (!result.ok) {
-      alert(getActionError(result));
+    if (draftStatusError) {
+      console.error(
+        "Draft metadata saved, but draft status could not be updated",
+        draftStatusError,
+      );
+      setPageError(
+        "Your title and description were saved, but the draft could not be refreshed in the In Progress list.",
+      );
       return;
     }
 
@@ -424,7 +462,13 @@ export default function TracklistDetailPage() {
     setItem({ ...item, title: trimmed, description: nextDescription });
     setTitle(trimmed);
     setDescription(nextDescription ?? "");
-    alert("Saved.");
+    setPageInfo("Draft saved to In Progress.");
+    window.setTimeout(() => setPageInfo(null), 1400);
+
+    trackEvent("saved_tracklist", {
+      tracklist_id: String(id),
+      song_count: songs.length,
+    });
   };
 
   const remove = async () => {
@@ -435,6 +479,11 @@ export default function TracklistDetailPage() {
       alert(getActionError(result));
       return;
     }
+
+    trackEvent("deleted_tracklist", {
+      tracklist_id: String(id),
+      source: "tracklist_editor",
+    });
 
     router.replace("/tracklists");
   };
@@ -458,6 +507,12 @@ export default function TracklistDetailPage() {
       return;
     }
 
+    trackEvent("added_song", {
+      tracklist_id: String(id),
+      platform: t.platform,
+      source: "search",
+    });
+
     await loadSongs();
   };
 
@@ -480,6 +535,12 @@ export default function TracklistDetailPage() {
       setPageError(getActionError(result));
       return;
     }
+
+    trackEvent("added_song", {
+      tracklist_id: String(id),
+      platform: "manual",
+      source: "manual_entry",
+    });
 
     setMTitle("");
     setMArtist("");
@@ -550,8 +611,8 @@ export default function TracklistDetailPage() {
 
     setSongs((prev) =>
       prev.map((s) =>
-        s.id === songId ? { ...s, note: text.length ? text : null } : s
-      )
+        s.id === songId ? { ...s, note: text.length ? text : null } : s,
+      ),
     );
     setPageInfo("Note saved.");
     window.setTimeout(() => setPageInfo(null), 1200);
@@ -576,7 +637,9 @@ export default function TracklistDetailPage() {
       return;
     }
 
-    setSongs((prev) => prev.map((s) => (s.id === songId ? { ...s, note: null } : s)));
+    setSongs((prev) =>
+      prev.map((s) => (s.id === songId ? { ...s, note: null } : s)),
+    );
     setPageInfo("Note cleared.");
     window.setTimeout(() => setPageInfo(null), 1200);
   };
@@ -604,7 +667,9 @@ export default function TracklistDetailPage() {
     }
 
     setSongs((prev) =>
-      prev.map((s) => (selectedIds.has(s.id) ? { ...s, note: text.length ? text : null } : s))
+      prev.map((s) =>
+        selectedIds.has(s.id) ? { ...s, note: text.length ? text : null } : s,
+      ),
     );
 
     setNoteDraftById((prev) => {
@@ -639,7 +704,7 @@ export default function TracklistDetailPage() {
     }
 
     setSongs((prev) =>
-      prev.map((s) => (selectedIds.has(s.id) ? { ...s, note: null } : s))
+      prev.map((s) => (selectedIds.has(s.id) ? { ...s, note: null } : s)),
     );
 
     setNoteDraftById((prev) => {
@@ -663,10 +728,9 @@ export default function TracklistDetailPage() {
     setPageError(null);
     setPageInfo(null);
 
-    const mixTitle =
-      item?.title?.trim()
-        ? item.title.trim()
-        : `Mixlist • ${new Date().toLocaleDateString()}`;
+    const mixTitle = item?.title?.trim()
+      ? item.title.trim()
+      : `Mixlist • ${new Date().toLocaleDateString()}`;
 
     const result = await createMixlistFromTracklistAction({
       source_tracklist_id: String(id),
@@ -691,8 +755,6 @@ export default function TracklistDetailPage() {
         })),
     });
 
-
-
     setCreatingMix(false);
 
     if (!result.ok) {
@@ -700,13 +762,36 @@ export default function TracklistDetailPage() {
       return;
     }
 
-    router.push(`/mixlists/${result.mixlistId}`);
-    
-    trackEvent("created_mixlist", {
+    const { error: statusError } = await supabase
+      .from("tracklists")
+      .update({ status: "published" })
+      .eq("id", String(id));
+
+    const publishAnalytics = {
       tracklist_id: String(id),
       mixlist_id: String(result.mixlistId),
       song_count: songs.length,
-    });
+      reveal_mode: mixReveal,
+      is_public: mixIsPublic,
+      include_song_notes: includeSongNotes,
+    };
+
+    // Keep the original event for existing dashboards, and add the clearer
+    // lifecycle event for the new Studio workflow.
+    trackEvent("created_mixlist", publishAnalytics);
+    trackEvent("published_mixlist", publishAnalytics);
+
+    if (statusError) {
+      console.error(
+        "Mixlist published, but the source draft status was not updated",
+        statusError,
+      );
+      alert(
+        "Your Mixlist was published, but the draft could not be moved out of In Progress. You can refresh the Studio and try again later.",
+      );
+    }
+
+    router.push(`/mixlists/${result.mixlistId}`);
   };
 
   if (loading) {
@@ -722,7 +807,9 @@ export default function TracklistDetailPage() {
       <div className="gv-paper-content">
         <div className="flex items-center justify-between">
           <div className="flex-1 text-center">
-            <h1 className="text-3xl font-semibold tracking-wide text-gv-accent">{item?.title}</h1>
+            <h1 className="text-3xl font-semibold tracking-wide text-gv-accent">
+              {item?.title}
+            </h1>
           </div>
 
           <button
@@ -745,7 +832,9 @@ export default function TracklistDetailPage() {
 
         <div className="mt-10 max-w-xl space-y-4">
           <div>
-            <label className="block text-xs tracking-widest text-gv-accent">TITLE</label>
+            <label className="block text-xs tracking-widest text-gv-accent">
+              TITLE
+            </label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -754,13 +843,19 @@ export default function TracklistDetailPage() {
           </div>
 
           {pageError && (
-            <InlineNotice kind="error" title="Something went wrong" message={pageError} />
+            <InlineNotice
+              kind="error"
+              title="Something went wrong"
+              message={pageError}
+            />
           )}
 
           {pageInfo && <InlineNotice kind="info" message={pageInfo} />}
 
           <div>
-            <label className="block text-xs tracking-widest text-gv-accent">DESCRIPTION</label>
+            <label className="block text-xs tracking-widest text-gv-accent">
+              DESCRIPTION
+            </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -775,7 +870,7 @@ export default function TracklistDetailPage() {
               disabled={saving}
               className="rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv-accent hover:bg-purple-500/20 transition disabled:opacity-50"
             >
-              {saving ? "SAVING…" : "SAVE"}
+              {saving ? "SAVING…" : "SAVE DRAFT"}
             </button>
 
             <Link
@@ -791,7 +886,9 @@ export default function TracklistDetailPage() {
           <h2 className="text-lg font-light tracking-wide">Songs</h2>
 
           <button
-            onClick={() => (multiNoteMode ? exitMultiNoteMode() : setMultiNoteMode(true))}
+            onClick={() =>
+              multiNoteMode ? exitMultiNoteMode() : setMultiNoteMode(true)
+            }
             className="rounded-full border border-purple-500/30 bg-purple-500/10 px-5 py-2 text-xs tracking-widest text-gv-accent hover:bg-purple-500/20 transition"
           >
             {multiNoteMode ? "EXIT MULTI-NOTE" : "MULTI-NOTE MODE"}
@@ -831,7 +928,9 @@ export default function TracklistDetailPage() {
               if (data.playlistUrl) {
                 window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
               } else {
-                alert(`Exported ${data.exportedCount ?? 0} tracks. (No URL returned)`);
+                alert(
+                  `Exported ${data.exportedCount ?? 0} tracks. (No URL returned)`,
+                );
               }
             } catch {
               alert("Export failed");
@@ -845,12 +944,15 @@ export default function TracklistDetailPage() {
           <div className="mt-4 max-w-xl rounded-2xl gv-row border border-white/10 bg-white/5 p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs tracking-widest text-gray-400">MULTI-NOTE</p>
+                <p className="text-xs tracking-widest text-gray-400">
+                  MULTI-NOTE
+                </p>
                 <p className="mt-2 text-sm text-gv-accent">
                   Select songs below, then apply one note to all of them.
                 </p>
                 <p className="mt-2 text-xs tracking-widest text-gray-500">
-                  {selectedCount} SELECTED{selectedRangeLabel ? ` • ${selectedRangeLabel}` : ""}
+                  {selectedCount} SELECTED
+                  {selectedRangeLabel ? ` • ${selectedRangeLabel}` : ""}
                 </p>
               </div>
 
@@ -905,10 +1007,14 @@ export default function TracklistDetailPage() {
 
         {DEV_MANUAL_ADD && (
           <div className="mt-4 border border-yellow-500/30 bg-yellow-500/10 p-3 rounded-lg">
-            <div className="text-xs text-yellow-300 tracking-widest mb-2">DEV ONLY</div>
+            <div className="text-xs text-yellow-300 tracking-widest mb-2">
+              DEV ONLY
+            </div>
 
             <div className="max-w-xl rounded-2xl border border-white/10 bg-white/5 p-5">
-              <p className="text-xs tracking-widest text-gray-400">MANUAL ADD</p>
+              <p className="text-xs tracking-widest text-gray-400">
+                MANUAL ADD
+              </p>
 
               <div className="mt-4 grid gap-3">
                 <input
@@ -953,7 +1059,9 @@ export default function TracklistDetailPage() {
 
         <div className="mt-8 space-y-2">
           {songs.length === 0 ? (
-            <p className="text-sm text-gray-400">No songs yet. Add one above.</p>
+            <p className="text-sm text-gray-400">
+              No songs yet. Add one above.
+            </p>
           ) : (
             songs.map((s) => {
               const noteOpen = expandedNoteId === s.id;
@@ -1002,7 +1110,9 @@ export default function TracklistDetailPage() {
 
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <button
-                        onClick={() => setExpandedNoteId(noteOpen ? null : s.id)}
+                        onClick={() =>
+                          setExpandedNoteId(noteOpen ? null : s.id)
+                        }
                         className="text-xs tracking-widest text-gv-accent hover:text-purple-300 transition"
                         title="Song note"
                       >
@@ -1038,7 +1148,7 @@ export default function TracklistDetailPage() {
                   {noteOpen ? (
                     <div className="px-4 pb-4">
                       <textarea
-                        value={noteDraftById[s.id] ?? (s.note ?? "")}
+                        value={noteDraftById[s.id] ?? s.note ?? ""}
                         onChange={(e) =>
                           setNoteDraftById((prev) => ({
                             ...prev,
@@ -1052,7 +1162,7 @@ export default function TracklistDetailPage() {
                       />
 
                       <CharacterCounter
-                        value={noteDraftById[s.id] ?? (s.note ?? "")}
+                        value={noteDraftById[s.id] ?? s.note ?? ""}
                         max={SONG_NOTE_LIMIT}
                       />
 
@@ -1081,28 +1191,30 @@ export default function TracklistDetailPage() {
           )}
 
           <div className="mt-10 max-w-xl rounded-2xl border border-white/10 gv-accent p-5">
-            <p className="text-xs tracking-widest text-gray-400">CREATE MIXLIST</p>
-              <textarea
-                value={mixMsg}
-                onChange={(e) => setMixMsg(e.target.value)}
-                maxLength={MIXLIST_MESSAGE_LIMIT}
-                className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-                rows={4}
-                placeholder="Optional message/context for the person receiving this…"
-              />
+            <p className="text-xs tracking-widest text-gray-400">
+              CREATE MIXLIST
+            </p>
+            <textarea
+              value={mixMsg}
+              onChange={(e) => setMixMsg(e.target.value)}
+              maxLength={MIXLIST_MESSAGE_LIMIT}
+              className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+              rows={4}
+              placeholder="Optional message/context for the person receiving this…"
+            />
 
-              <CharacterCounter value={mixMsg} max={MIXLIST_MESSAGE_LIMIT} />
+            <CharacterCounter value={mixMsg} max={MIXLIST_MESSAGE_LIMIT} />
 
-              <textarea
-                value={mixFinish}
-                onChange={(e) => setMixFinish(e.target.value)}
-                maxLength={FINISHING_NOTE_LIMIT}
-                className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-                rows={4}
-                placeholder="Finishing note (only shown at the end)…"
-              />
+            <textarea
+              value={mixFinish}
+              onChange={(e) => setMixFinish(e.target.value)}
+              maxLength={FINISHING_NOTE_LIMIT}
+              className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+              rows={4}
+              placeholder="Finishing note (only shown at the end)…"
+            />
 
-              <CharacterCounter value={mixFinish} max={FINISHING_NOTE_LIMIT} />
+            <CharacterCounter value={mixFinish} max={FINISHING_NOTE_LIMIT} />
 
             <label className="mt-4 flex items-center gap-3 text-xs tracking-widest text-gray-400">
               <input

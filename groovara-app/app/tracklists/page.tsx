@@ -1,23 +1,72 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { trackEvent } from "@/lib/analytics";
 import { supabase } from "../../lib/supabaseClient";
 import InlineNotice from "../../lib/InlineNotice";
-import {
-  deleteTracklistAction,
-  importSpotifyTracklistAction,
-} from "./actions";
+import { deleteTracklistAction, importSpotifyTracklistAction } from "./actions";
+
+type StudioSection = "progress" | "sent" | "received";
 
 type Tracklist = {
   id: string;
+  user_id?: string;
   title: string;
   description: string | null;
   created_at: string;
+  updated_at?: string | null;
+  status?: "draft" | "published" | "archived";
+};
+
+type Mixlist = {
+  id: string;
+  owner_user_id?: string;
+  title: string;
+  created_at: string;
+  updated_at?: string | null;
+};
+
+type MixlistReceipt = {
+  mixlist_id: string;
+  first_opened_at: string;
+  last_opened_at: string;
+  archived: boolean;
+};
+
+type SentMixlistArchive = {
+  mixlist_id: string;
+};
+
+type ReceivedMixlist = Mixlist & {
+  first_opened_at: string;
+  last_opened_at: string;
+  revealed_count: number;
+};
+
+type TracklistSongSummary = {
+  tracklist_id: string;
+  note: string | null;
+};
+
+type MixlistSongSummary = {
+  mixlist_id: string;
+  note: string | null;
+};
+
+type MixlistProgress = {
+  mixlist_id: string;
+  revealed_count: number;
+  updated_at: string;
+};
+
+type CountSummary = {
+  songs: number;
+  notes: number;
 };
 
 const accentLink =
-  "text-xs tracking-widest gv-accent hover:text-purple-900 dark:gv-accent dark:hover:text-purple-200 transition";
+  "text-xs tracking-[0.2em] text-[#57577F] transition hover:text-[#393956] dark:text-[#CED7DF] dark:hover:text-white";
 
 function getActionError(result: {
   type: string;
@@ -28,7 +77,9 @@ function getActionError(result: {
   if (result.type === "validation") {
     return (
       result.formErrors?.[0] ??
-      Object.values(result.fieldErrors ?? {}).flat().find(Boolean) ??
+      Object.values(result.fieldErrors ?? {})
+        .flat()
+        .find(Boolean) ??
       "Invalid request."
     );
   }
@@ -36,28 +87,229 @@ function getActionError(result: {
   return result.message ?? "Something went wrong.";
 }
 
+function buildCounts<T extends { note: string | null }>(
+  rows: T[],
+  getId: (row: T) => string,
+) {
+  const result = new Map<string, CountSummary>();
+
+  for (const row of rows) {
+    const id = getId(row);
+    const current = result.get(id) ?? { songs: 0, notes: 0 };
+    current.songs += 1;
+    if ((row.note ?? "").trim()) current.notes += 1;
+    result.set(id, current);
+  }
+
+  return result;
+}
+
+function formatCount(value: number, singular: string, plural = `${singular}s`) {
+  return `${value} ${value === 1 ? singular : plural}`;
+}
+
+function formatRelativeDate(value: string | null | undefined) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60_000));
+
+  if (diffMinutes < 1) return "just now";
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return "yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: date.getFullYear() === now.getFullYear() ? undefined : "numeric",
+  });
+}
+
+function metadataLine(parts: Array<string | null | undefined>) {
+  return parts.filter(Boolean).join(" • ");
+}
+
 export default function TracklistsPage() {
-  const [items, setItems] = useState<Tracklist[]>([]);
+  const [activeSection, setActiveSection] = useState<StudioSection>("progress");
+  const [drafts, setDrafts] = useState<Tracklist[]>([]);
+  const [sent, setSent] = useState<Mixlist[]>([]);
+  const [received, setReceived] = useState<ReceivedMixlist[]>([]);
+  const [tracklistCounts, setTracklistCounts] = useState<
+    Map<string, CountSummary>
+  >(new Map());
+  const [mixlistCounts, setMixlistCounts] = useState<Map<string, CountSummary>>(
+    new Map(),
+  );
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importUrl, setImportUrl] = useState("");
   const [importErr, setImportErr] = useState<string | null>(null);
   const [importBusy, setImportBusy] = useState(false);
+  const [removingKey, setRemovingKey] = useState<string | null>(null);
+  const initialTabTrackedRef = useRef(false);
 
   const load = async () => {
     setErr(null);
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from("tracklists")
-      .select("id,title,description,created_at")
-      .order("created_at", { ascending: false });
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    if (error) setErr(error.message);
-    else setItems((data ?? []) as Tracklist[]);
+      if (userError) throw userError;
+      if (!user)
+        throw new Error("You need to be signed in to open the Studio.");
 
-    setLoading(false);
+      const [draftResult, sentResult, receiptResult, sentArchiveResult] =
+        await Promise.all([
+          supabase
+            .from("tracklists")
+            .select("*")
+            .eq("user_id", user.id)
+            .eq("status", "draft")
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("mixlists")
+            .select("*")
+            .eq("owner_user_id", user.id)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("mixlist_receipts")
+            .select("mixlist_id,first_opened_at,last_opened_at,archived")
+            .eq("user_id", user.id)
+            .eq("archived", false)
+            .order("last_opened_at", { ascending: false }),
+          supabase
+            .from("sent_mixlist_archives")
+            .select("mixlist_id")
+            .eq("user_id", user.id),
+        ]);
+
+      if (draftResult.error) throw draftResult.error;
+      if (sentResult.error) throw sentResult.error;
+      if (receiptResult.error) throw receiptResult.error;
+      if (sentArchiveResult.error) throw sentArchiveResult.error;
+
+      const nextDrafts = ((draftResult.data ?? []) as Tracklist[]).sort(
+        (a, b) => {
+          const aTime = new Date(a.updated_at ?? a.created_at).getTime();
+          const bTime = new Date(b.updated_at ?? b.created_at).getTime();
+          return bTime - aTime;
+        },
+      );
+      const archivedSentIds = new Set(
+        ((sentArchiveResult.data ?? []) as SentMixlistArchive[]).map(
+          (archive) => archive.mixlist_id,
+        ),
+      );
+      const nextSent = ((sentResult.data ?? []) as Mixlist[]).filter(
+        (mixlist) => !archivedSentIds.has(mixlist.id),
+      );
+      const receipts = (receiptResult.data ?? []) as MixlistReceipt[];
+      const receivedIds = receipts.map((receipt) => receipt.mixlist_id);
+
+      let nextReceived: ReceivedMixlist[] = [];
+      let progressRows: MixlistProgress[] = [];
+
+      if (receivedIds.length > 0) {
+        const [receivedMixlistsResult, progressResult] = await Promise.all([
+          supabase.from("mixlists").select("*").in("id", receivedIds),
+          supabase
+            .from("mixlist_progress")
+            .select("mixlist_id,revealed_count,updated_at")
+            .eq("user_id", user.id)
+            .in("mixlist_id", receivedIds),
+        ]);
+
+        if (receivedMixlistsResult.error) throw receivedMixlistsResult.error;
+        if (!progressResult.error) {
+          progressRows = (progressResult.data ?? []) as MixlistProgress[];
+        }
+
+        const mixlistById = new Map(
+          ((receivedMixlistsResult.data ?? []) as Mixlist[]).map((mixlist) => [
+            mixlist.id,
+            mixlist,
+          ]),
+        );
+        const progressById = new Map(
+          progressRows.map((progress) => [progress.mixlist_id, progress]),
+        );
+
+        nextReceived = receipts.flatMap((receipt) => {
+          const mixlist = mixlistById.get(receipt.mixlist_id);
+          if (!mixlist) return [];
+
+          return [
+            {
+              ...mixlist,
+              first_opened_at: receipt.first_opened_at,
+              last_opened_at: receipt.last_opened_at,
+              revealed_count:
+                progressById.get(receipt.mixlist_id)?.revealed_count ?? 0,
+            },
+          ];
+        });
+      }
+
+      const draftIds = nextDrafts.map((tracklist) => tracklist.id);
+      const mixlistIds = Array.from(
+        new Set([...nextSent.map((mixlist) => mixlist.id), ...receivedIds]),
+      );
+
+      let nextTracklistCounts = new Map<string, CountSummary>();
+      let nextMixlistCounts = new Map<string, CountSummary>();
+
+      if (draftIds.length > 0) {
+        const { data } = await supabase
+          .from("tracklist_songs")
+          .select("tracklist_id,note")
+          .in("tracklist_id", draftIds);
+
+        nextTracklistCounts = buildCounts(
+          (data ?? []) as TracklistSongSummary[],
+          (song) => song.tracklist_id,
+        );
+      }
+
+      if (mixlistIds.length > 0) {
+        const { data } = await supabase
+          .from("mixlist_songs")
+          .select("mixlist_id,note")
+          .in("mixlist_id", mixlistIds);
+
+        nextMixlistCounts = buildCounts(
+          (data ?? []) as MixlistSongSummary[],
+          (song) => song.mixlist_id,
+        );
+      }
+
+      setDrafts(nextDrafts);
+      setSent(nextSent);
+      setReceived(nextReceived);
+      setTracklistCounts(nextTracklistCounts);
+      setMixlistCounts(nextMixlistCounts);
+    } catch (error: unknown) {
+      console.error("Studio load failed", error);
+      setErr(
+        error instanceof Error ? error.message : "Couldn’t load the Studio.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -67,7 +319,7 @@ export default function TracklistsPage() {
   }, []);
 
   const remove = async (id: string) => {
-    if (!confirm("Delete this tracklist?")) return;
+    if (!confirm("Delete this draft?")) return;
 
     const result = await deleteTracklistAction({ tracklistId: id });
     if (!result.ok) {
@@ -75,7 +327,120 @@ export default function TracklistsPage() {
       return;
     }
 
-    setItems((prev) => prev.filter((t) => t.id !== id));
+    setDrafts((previous) =>
+      previous.filter((tracklist) => tracklist.id !== id),
+    );
+
+    trackEvent("deleted_tracklist", {
+      tracklist_id: id,
+      source: "studio_in_progress",
+    });
+  };
+
+  const removeSentFromList = async (mixlistId: string) => {
+    if (
+      !confirm(
+        "Remove this Mixlist from Sent? The shared Mixlist and its link will keep working.",
+      )
+    ) {
+      return;
+    }
+
+    setRemovingKey(`sent:${mixlistId}`);
+    setErr(null);
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) throw userError;
+      if (!user) throw new Error("You need to be signed in.");
+
+      const { error } = await supabase.from("sent_mixlist_archives").upsert(
+        {
+          user_id: user.id,
+          mixlist_id: mixlistId,
+          archived_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "user_id,mixlist_id",
+        },
+      );
+
+      if (error) throw error;
+
+      setSent((previous) =>
+        previous.filter((mixlist) => mixlist.id !== mixlistId),
+      );
+
+      trackEvent("removed_sent_mixlist", {
+        mixlist_id: mixlistId,
+        source: "studio_sent_tab",
+      });
+    } catch (error: unknown) {
+      console.error("Could not remove sent Mixlist from Studio", error);
+      setErr(
+        error instanceof Error
+          ? error.message
+          : "Couldn’t remove this Mixlist from Sent.",
+      );
+    } finally {
+      setRemovingKey(null);
+    }
+  };
+
+  const removeReceivedFromList = async (mixlistId: string) => {
+    if (
+      !confirm(
+        "Remove this Mixlist from Received? You can add it back by opening its shared link again.",
+      )
+    ) {
+      return;
+    }
+
+    setRemovingKey(`received:${mixlistId}`);
+    setErr(null);
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) throw userError;
+      if (!user) throw new Error("You need to be signed in.");
+
+      const { error } = await supabase
+        .from("mixlist_receipts")
+        .update({
+          archived: true,
+          last_opened_at: new Date().toISOString(),
+        })
+        .eq("user_id", user.id)
+        .eq("mixlist_id", mixlistId);
+
+      if (error) throw error;
+
+      setReceived((previous) =>
+        previous.filter((mixlist) => mixlist.id !== mixlistId),
+      );
+
+      trackEvent("removed_received_mixlist", {
+        mixlist_id: mixlistId,
+        source: "studio_received_tab",
+      });
+    } catch (error: unknown) {
+      console.error("Could not remove received Mixlist from Studio", error);
+      setErr(
+        error instanceof Error
+          ? error.message
+          : "Couldn’t remove this Mixlist from Received.",
+      );
+    } finally {
+      setRemovingKey(null);
+    }
   };
 
   const runSpotifyImport = async () => {
@@ -88,17 +453,18 @@ export default function TracklistsPage() {
 
     setImportBusy(true);
     try {
-      const res = await fetch("/api/spotify/playlist", {
+      const response = await fetch("/api/spotify/playlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
       });
 
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? "Import failed.");
+      const json = await response.json();
+      if (!response.ok) throw new Error(json?.error ?? "Import failed.");
 
       const playlistName: string = json.playlist?.name ?? "Imported Playlist";
-      const playlistDesc: string | null = json.playlist?.description ?? null;
+      const playlistDescription: string | null =
+        json.playlist?.description ?? null;
 
       type ImportedTrack = {
         platform: "spotify";
@@ -119,148 +485,412 @@ export default function TracklistsPage() {
 
       const result = await importSpotifyTracklistAction({
         playlistName,
-        playlistDescription: playlistDesc,
+        playlistDescription,
         tracks,
       });
 
-      if (!result.ok) {
-        throw new Error(getActionError(result));
-      }
+      if (!result.ok) throw new Error(getActionError(result));
+
+      trackEvent("imported_spotify_playlist", {
+        tracklist_id: result.tracklistId,
+        song_count: tracks.length,
+      });
 
       setImportOpen(false);
       setImportUrl("");
       window.location.href = `/tracklists/${result.tracklistId}`;
-    } catch (e: unknown) {
-      console.error(e);
-      const msg = e instanceof Error ? e.message : "Unknown error";
-      setImportErr(msg ?? "Import failed.");
+    } catch (error: unknown) {
+      console.error(error);
+      setImportErr(error instanceof Error ? error.message : "Import failed.");
     } finally {
       setImportBusy(false);
     }
   };
 
+  const sectionCount = {
+    progress: drafts.length,
+    sent: sent.length,
+    received: received.length,
+  };
+
+  const currentCount = sectionCount[activeSection];
+
+  useEffect(() => {
+    if (loading || err || initialTabTrackedRef.current) return;
+
+    initialTabTrackedRef.current = true;
+    trackEvent("studio_tab_viewed", {
+      tab: "in_progress",
+      item_count: drafts.length,
+    });
+  }, [loading, err, drafts.length]);
+
+  const handleSectionChange = (section: StudioSection) => {
+    if (section === activeSection) return;
+
+    setActiveSection(section);
+    trackEvent("studio_tab_viewed", {
+      tab: section === "progress" ? "in_progress" : section,
+      item_count: sectionCount[section],
+    });
+  };
+
+  const sectionTitle = useMemo(() => {
+    if (activeSection === "progress") return "IN PROGRESS";
+    if (activeSection === "sent") return "SENT";
+    return "RECEIVED";
+  }, [activeSection]);
+
+  const renderCount = (count: number) =>
+    `${count} ${count === 1 ? "MIXLIST" : "MIXLISTS"}`;
+
   return (
     <main className="gv-paper-bg min-h-screen">
-      <div className="gv-paper-content p-10">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-light tracking-wide">Mixlists</h1>
+      <div className="gv-paper-content mx-auto max-w-6xl px-5 pb-16 pt-24 sm:px-8 lg:px-12">
+        <div className="flex flex-wrap items-center justify-end gap-5">
+          <button onClick={() => setImportOpen(true)} className={accentLink}>
+            IMPORT PLAYLIST
+          </button>
 
-          <div className="flex items-center gap-6">
-            <button onClick={() => setImportOpen(true)} className={accentLink}>
-              IMPORT PLAYLIST
-            </button>
-
-            <Link href="/tracklists/new" className={accentLink}>
-              NEW
-            </Link>
-          </div>
+          <Link href="/tracklists/new" className={accentLink}>
+            NEW MIXLIST
+          </Link>
         </div>
 
-        {loading && <p className="mt-6 text-muted-foreground">Loading…</p>}
+        <nav
+          aria-label="Studio sections"
+          className="mt-8 grid grid-cols-1 border-y border-[#6a6258]/20 sm:grid-cols-3 dark:border-white/10"
+        >
+          {(
+            [
+              ["progress", "IN PROGRESS"],
+              ["sent", "SENT"],
+              ["received", "RECEIVED"],
+            ] as Array<[StudioSection, string]>
+          ).map(([section, label]) => {
+            const active = activeSection === section;
 
-        {err && (
-          <div className="mt-6">
-            <InlineNotice kind="error" title="Couldn’t load your tracklists" message={err} />
-          </div>
-        )}
+            return (
+              <button
+                key={section}
+                type="button"
+                onClick={() => handleSectionChange(section)}
+                className={`group relative min-h-28 overflow-hidden px-4 py-6 text-left transition sm:text-center ${
+                  active
+                    ? "text-[#302b31] dark:text-[#f4eef7]"
+                    : "text-[#7b746c] hover:text-[#57577F] dark:text-white/45 dark:hover:text-[#CED7DF]"
+                }`}
+              >
+                {active ? (
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-1/2 top-1/2 h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full border-[8px] border-[#57577F]/[0.055] dark:border-[#CED7DF]/[0.05]"
+                  >
+                    <span className="absolute inset-3 rounded-full border-[5px] border-[#57577F]/[0.045] dark:border-[#CED7DF]/[0.04]" />
+                  </span>
+                ) : null}
 
-        {!loading && !err && items.length === 0 && (
-          <div className="mt-6">
+                <span className="relative block text-xl font-medium tracking-[0.08em] sm:text-2xl">
+                  {label}
+                </span>
+                <span className="relative mt-2 block text-[9px] tracking-[0.24em] opacity-65">
+                  {renderCount(sectionCount[section])}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+
+        {loading ? (
+          <p className="mx-auto mt-16 max-w-3xl text-sm text-muted-foreground">
+            Loading the Studio…
+          </p>
+        ) : null}
+
+        {err ? (
+          <div className="mx-auto mt-10 max-w-3xl">
             <InlineNotice
-              kind="info"
-              title="No tracklists yet"
-              message="Create your first tracklist to start building something worth sharing."
+              kind="error"
+              title="Couldn’t load the Studio"
+              message={err}
             />
           </div>
-        )}
+        ) : null}
 
-        <div className="mt-8 space-y-3">
-          {items.map((t) => (
+        {!loading && !err ? (
+          <section className="relative mx-auto mt-16 max-w-3xl">
             <div
-              key={t.id}
-              className="flex items-center justify-between rounded-2xl border border-border bg-card/80 px-5 py-4 shadow-sm"
+              aria-hidden="true"
+              className="pointer-events-none absolute -left-52 -top-28 hidden h-72 w-72 rounded-full border-[12px] border-[#57577F]/[0.04] lg:block dark:border-[#CED7DF]/[0.035]"
             >
-              <div className="min-w-0">
-                <Link
-                  href={`/tracklists/${t.id}`}
-                  className="block truncate text-lg font-light text-foreground hover:text-purple-700 dark:hover:text-purple-200 transition"
-                >
-                  {t.title}
-                </Link>
-                {t.description && (
-                  <p className="mt-1 text-sm text-muted-foreground truncate">{t.description}</p>
-                )}
+              <span className="absolute inset-8 rounded-full border-[8px] border-[#57577F]/[0.035] dark:border-[#CED7DF]/[0.03]" />
+            </div>
+
+            <div className="relative">
+              <h1 className="text-3xl font-medium tracking-[0.08em] text-[#302b31] dark:text-[#f4eef7] sm:text-4xl">
+                {sectionTitle}
+              </h1>
+              <p className="mt-2 text-[10px] tracking-[0.25em] text-[#6b635b] dark:text-white/45">
+                {renderCount(currentCount)}
+              </p>
+
+              <div className="mt-10 border-t border-[#6a6258]/25 dark:border-white/10">
+                {activeSection === "progress"
+                  ? drafts.map((tracklist) => {
+                      const counts = tracklistCounts.get(tracklist.id) ?? {
+                        songs: 0,
+                        notes: 0,
+                      };
+                      const edited = formatRelativeDate(
+                        tracklist.updated_at ?? tracklist.created_at,
+                      );
+
+                      return (
+                        <article
+                          key={tracklist.id}
+                          className="group flex items-start justify-between gap-5 border-b border-[#6a6258]/18 py-5 dark:border-white/[0.08]"
+                        >
+                          <Link
+                            href={`/tracklists/${tracklist.id}`}
+                            onClick={() =>
+                              trackEvent("studio_item_opened", {
+                                section: "in_progress",
+                                item_type: "tracklist",
+                                tracklist_id: tracklist.id,
+                              })
+                            }
+                            className="min-w-0 flex-1"
+                          >
+                            <h2 className="truncate text-xl font-medium text-[#292521] transition group-hover:text-[#57577F] dark:text-white/90 dark:group-hover:text-[#CED7DF] sm:text-2xl">
+                              {tracklist.title}
+                            </h2>
+                            <p className="mt-1.5 text-xs tracking-[0.02em] text-[#6b635b] dark:text-white/45">
+                              {metadataLine([
+                                formatCount(counts.songs, "song"),
+                                counts.notes === 0
+                                  ? "No notes"
+                                  : formatCount(counts.notes, "note"),
+                                "Draft",
+                                edited ? `Edited ${edited}` : null,
+                              ])}
+                            </p>
+                            {tracklist.description ? (
+                              <p className="mt-2 line-clamp-1 text-sm text-[#6b635b] dark:text-white/45">
+                                {tracklist.description}
+                              </p>
+                            ) : null}
+                          </Link>
+
+                          <button
+                            type="button"
+                            onClick={() => remove(tracklist.id)}
+                            className="mt-1 text-[10px] tracking-[0.18em] text-[#8a8178] transition hover:text-red-700 dark:text-white/35 dark:hover:text-red-300"
+                          >
+                            DELETE
+                          </button>
+                        </article>
+                      );
+                    })
+                  : null}
+
+                {activeSection === "sent"
+                  ? sent.map((mixlist) => {
+                      const counts = mixlistCounts.get(mixlist.id) ?? {
+                        songs: 0,
+                        notes: 0,
+                      };
+                      const published = formatRelativeDate(mixlist.created_at);
+
+                      return (
+                        <article
+                          key={mixlist.id}
+                          className="group flex items-start justify-between gap-5 border-b border-[#6a6258]/18 py-5 dark:border-white/[0.08]"
+                        >
+                          <Link
+                            href={`/mixlists/${mixlist.id}`}
+                            onClick={() =>
+                              trackEvent("studio_item_opened", {
+                                section: "sent",
+                                item_type: "mixlist",
+                                mixlist_id: mixlist.id,
+                              })
+                            }
+                            className="min-w-0 flex-1"
+                          >
+                            <h2 className="truncate text-xl font-medium text-[#292521] transition group-hover:text-[#57577F] dark:text-white/90 dark:group-hover:text-[#CED7DF] sm:text-2xl">
+                              {mixlist.title}
+                            </h2>
+                            <p className="mt-1.5 text-xs tracking-[0.02em] text-[#6b635b] dark:text-white/45">
+                              {metadataLine([
+                                formatCount(counts.songs, "song"),
+                                counts.notes === 0
+                                  ? "No notes"
+                                  : formatCount(counts.notes, "note"),
+                                "Sent",
+                                published ? `Published ${published}` : null,
+                              ])}
+                            </p>
+                          </Link>
+
+                          <button
+                            type="button"
+                            onClick={() => void removeSentFromList(mixlist.id)}
+                            disabled={removingKey === `sent:${mixlist.id}`}
+                            className="mt-1 text-[10px] tracking-[0.18em] text-[#8a8178] transition hover:text-red-700 disabled:cursor-wait disabled:opacity-45 dark:text-white/35 dark:hover:text-red-300"
+                          >
+                            {removingKey === `sent:${mixlist.id}`
+                              ? "REMOVING…"
+                              : "REMOVE"}
+                          </button>
+                        </article>
+                      );
+                    })
+                  : null}
+
+                {activeSection === "received"
+                  ? received.map((mixlist) => {
+                      const counts = mixlistCounts.get(mixlist.id) ?? {
+                        songs: 0,
+                        notes: 0,
+                      };
+                      const listened = formatRelativeDate(
+                        mixlist.last_opened_at,
+                      );
+                      const listeningState =
+                        counts.songs > 0 &&
+                        mixlist.revealed_count >= counts.songs
+                          ? "Finished"
+                          : mixlist.revealed_count > 0
+                            ? "Started"
+                            : "Unopened";
+
+                      return (
+                        <article
+                          key={mixlist.id}
+                          className="group flex items-start justify-between gap-5 border-b border-[#6a6258]/18 py-5 dark:border-white/[0.08]"
+                        >
+                          <Link
+                            href={`/mixlists/${mixlist.id}`}
+                            onClick={() =>
+                              trackEvent("studio_item_opened", {
+                                section: "received",
+                                item_type: "mixlist",
+                                mixlist_id: mixlist.id,
+                              })
+                            }
+                            className="min-w-0 flex-1"
+                          >
+                            <h2 className="truncate text-xl font-medium text-[#292521] transition group-hover:text-[#57577F] dark:text-white/90 dark:group-hover:text-[#CED7DF] sm:text-2xl">
+                              {mixlist.title}
+                            </h2>
+                            <p className="mt-1.5 text-xs tracking-[0.02em] text-[#6b635b] dark:text-white/45">
+                              {metadataLine([
+                                formatCount(counts.songs, "song"),
+                                counts.notes === 0
+                                  ? "No notes"
+                                  : formatCount(counts.notes, "note"),
+                                listeningState,
+                                listened ? `Last opened ${listened}` : null,
+                              ])}
+                            </p>
+                          </Link>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void removeReceivedFromList(mixlist.id)
+                            }
+                            disabled={removingKey === `received:${mixlist.id}`}
+                            className="mt-1 text-[10px] tracking-[0.18em] text-[#8a8178] transition hover:text-red-700 disabled:cursor-wait disabled:opacity-45 dark:text-white/35 dark:hover:text-red-300"
+                          >
+                            {removingKey === `received:${mixlist.id}`
+                              ? "REMOVING…"
+                              : "REMOVE"}
+                          </button>
+                        </article>
+                      );
+                    })
+                  : null}
               </div>
 
+              {currentCount === 0 ? (
+                <div className="border-b border-[#6a6258]/18 py-10 text-sm text-[#7b746c] dark:border-white/[0.08] dark:text-white/40">
+                  Nothing here yet.
+                </div>
+              ) : null}
+
               <button
-                onClick={() => remove(t.id)}
-                className="text-xs tracking-widest text-muted-foreground hover:text-red-600 dark:hover:text-red-300 transition"
+                type="button"
+                onClick={() => void load()}
+                className="mt-8 text-[10px] tracking-[0.2em] text-[#7b746c] transition hover:text-[#57577F] dark:text-white/35 dark:hover:text-[#CED7DF]"
               >
-                DELETE
+                REFRESH
               </button>
             </div>
-          ))}
-        </div>
-
-        <button
-          onClick={load}
-          className="mt-10 text-xs tracking-widest text-muted-foreground hover:text-purple-700 dark:hover:text-purple-300 transition"
-        >
-          REFRESH
-        </button>
+          </section>
+        ) : null}
 
         {importOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-            <div className="w-full max-w-xl rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <div className="w-full max-w-xl rounded-3xl border border-[#d1c6b3] bg-[#fff8ec] p-6 text-[#292521] shadow-2xl dark:border-white/10 dark:bg-[#111113] dark:text-white">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs tracking-widest text-muted-foreground">IMPORT PLAYLIST</p>
-                  <h3 className="mt-2 text-lg font-light">Spotify (for now)</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Paste a Spotify playlist URL. We’ll import it into a new Tracklist.
+                  <p className="text-xs tracking-[0.2em] text-[#6b635b] dark:text-white/45">
+                    IMPORT PLAYLIST
+                  </p>
+                  <h3 className="mt-2 text-xl font-medium">Spotify, for now</h3>
+                  <p className="mt-2 text-sm text-[#6b635b] dark:text-white/45">
+                    Paste a public Spotify playlist URL to turn it into a new
+                    Studio draft.
                   </p>
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => {
                     if (importBusy) return;
                     setImportOpen(false);
                     setImportErr(null);
                   }}
-                  className="text-xs tracking-widest text-muted-foreground hover:text-purple-700 dark:hover:text-purple-300 transition"
+                  className="text-xs tracking-[0.18em] text-[#6b635b] transition hover:text-[#57577F] dark:text-white/45 dark:hover:text-[#CED7DF]"
                 >
                   CLOSE
                 </button>
               </div>
 
               <div className="mt-5">
-                <label className="block text-xs tracking-widest text-muted-foreground">
+                <label className="block text-xs tracking-[0.18em] text-[#6b635b] dark:text-white/45">
                   PLAYLIST URL
                 </label>
                 <input
                   value={importUrl}
-                  onChange={(e) => setImportUrl(e.target.value)}
+                  onChange={(event) => setImportUrl(event.target.value)}
                   placeholder="https://open.spotify.com/playlist/..."
-                  className="mt-2 w-full rounded-xl border border-border bg-background/60 px-4 py-3 text-foreground outline-none focus:border-purple-500/40"
+                  className="mt-2 w-full rounded-xl border border-[#cfc3ad] bg-white/55 px-4 py-3 text-[#292521] outline-none transition focus:border-[#57577F]/55 dark:border-white/10 dark:bg-black/20 dark:text-white dark:focus:border-[#CED7DF]/40"
                 />
               </div>
 
               {importErr ? (
                 <div className="mt-4">
-                  <InlineNotice kind="error" title="Import failed" message={importErr} />
+                  <InlineNotice
+                    kind="error"
+                    title="Import failed"
+                    message={importErr}
+                  />
                 </div>
               ) : null}
 
-              <div className="mt-5 flex items-center gap-3">
+              <div className="mt-5 flex flex-wrap items-center gap-3">
                 <button
+                  type="button"
                   onClick={runSpotifyImport}
                   disabled={importBusy}
-                  className="rounded-full border border-purple-500/40 gv-accent px-6 py-3 text-xs tracking-widest text-purple-800 hover:bg-purple-500/15 transition disabled:opacity-50 dark:text-purple-200"
+                  className="rounded-full border border-[#57577F]/35 bg-[#57577F]/10 px-6 py-3 text-xs tracking-[0.18em] text-[#3f3f63] transition hover:bg-[#57577F]/15 disabled:opacity-50 dark:border-[#CED7DF]/30 dark:bg-[#CED7DF]/10 dark:text-[#CED7DF] dark:hover:bg-[#CED7DF]/15"
                 >
                   {importBusy ? "IMPORTING…" : "IMPORT"}
                 </button>
 
-                <span className="text-xs tracking-widest text-muted-foreground">
+                <span className="text-xs tracking-[0.12em] text-[#7b746c] dark:text-white/35">
                   Public playlists work best right now.
                 </span>
               </div>

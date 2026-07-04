@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trackEvent } from "@/lib/analytics";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import InlineNotice from "../../../lib/InlineNotice";
 import { supabase } from "../../../lib/supabaseClient";
 import { convertTrackPlatform } from "@/lib/platformConversion";
+import { copyMixlistToStudioAction } from "./actions";
 import {
   createTheme,
   TrackScene,
@@ -22,6 +23,7 @@ type Mixlist = {
   finishing_note: string | null;
   reveal_mode: boolean;
   include_song_notes: boolean;
+  owner_user_id: string;
 };
 
 type MixSong = {
@@ -41,11 +43,16 @@ type MixlistProgressRow = {
   clicked_json: boolean[] | null;
 };
 
+const purpleActionButton =
+  "w-full rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv_accent transition hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-50";
+
 function getPlatform(url: string): UiTrack["platform"] {
   const value = url.toLowerCase();
-  if (value.includes("youtube.com") || value.includes("youtu.be")) return "youtube";
+  if (value.includes("youtube.com") || value.includes("youtu.be"))
+    return "youtube";
   if (value.includes("spotify.com")) return "spotify";
-  if (value.includes("music.apple.com") || value.includes("itunes.apple.com")) return "apple";
+  if (value.includes("music.apple.com") || value.includes("itunes.apple.com"))
+    return "apple";
   return "other";
 }
 
@@ -116,7 +123,7 @@ async function refreshYouTubeSongsForCompliance(list: MixSong[]) {
     })
     .filter(
       (ref): ref is { table: "mixlist_songs"; id: string; url: string } =>
-        ref !== null
+        ref !== null,
     );
 
   if (songRefs.length === 0) return list;
@@ -138,7 +145,7 @@ async function refreshYouTubeSongsForCompliance(list: MixSong[]) {
 
     const data = (await response.json()) as { items?: YouTubeRefreshRow[] };
     const byVideoId = new Map(
-      (data.items ?? []).map((item) => [item.video_id, item])
+      (data.items ?? []).map((item) => [item.video_id, item]),
     );
 
     return list.map((song) => {
@@ -173,7 +180,11 @@ async function refreshYouTubeSongsForCompliance(list: MixSong[]) {
 }
 
 function toUiTrack(song: MixSong, index: number): UiTrack {
-  const theme = createTheme(`${song.id}:${song.title}:${song.artist}:${index}`, song.title, song.artist);
+  const theme = createTheme(
+    `${song.id}:${song.title}:${song.artist}:${index}`,
+    song.title,
+    song.artist,
+  );
 
   return {
     id: song.id,
@@ -189,18 +200,20 @@ function toUiTrack(song: MixSong, index: number): UiTrack {
   };
 }
 
-
 export default function MixlistPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const id = params.id;
   const mixlistId = String(id);
-  
 
   const [mix, setMix] = useState<Mixlist | null>(null);
   const [songs, setSongs] = useState<MixSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [copyingToStudio, setCopyingToStudio] = useState(false);
+  const [studioStatus, setStudioStatus] = useState<string | null>(null);
+  const [resetStatus, setResetStatus] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
@@ -211,11 +224,14 @@ export default function MixlistPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [progressLoaded, setProgressLoaded] = useState(false);
   const saveTimerRef = useRef<number | null>(null);
-  const [preferredPlatform, setPreferredPlatform] = useState<"spotify" | "youtube" | "apple">("youtube");
+  const receiptTrackedRef = useRef(false);
+  const openedMixlistTrackedRef = useRef(false);
+  const [preferredPlatform, setPreferredPlatform] = useState<
+    "spotify" | "youtube" | "apple"
+  >("youtube");
 
   const [autoplayToken, setAutoplayToken] = useState(0);
   const [hasInteracted, setHasInteracted] = useState(false);
-
 
   type Platform = "spotify" | "youtube" | "apple";
 
@@ -227,7 +243,8 @@ export default function MixlistPage() {
     url?: string;
   };
 
-  const [convertedActiveTrack, setConvertedActiveTrack] = useState<ConvertedTrack | null>(null);
+  const [convertedActiveTrack, setConvertedActiveTrack] =
+    useState<ConvertedTrack | null>(null);
   const [convertingTrack, setConvertingTrack] = useState(false);
 
   const handleCopyLink = async () => {
@@ -245,6 +262,10 @@ export default function MixlistPage() {
         document.body.removeChild(ta);
       }
       setCopyStatus("Copied link.");
+      trackEvent("copied_mixlist_link", {
+        mixlist_id: mixlistId,
+        source: "mixlist_page",
+      });
       window.setTimeout(() => setCopyStatus(null), 1500);
     } catch {
       setCopyStatus("Couldn't copy. Copy from the address bar.");
@@ -252,9 +273,33 @@ export default function MixlistPage() {
     }
   };
 
+  const handleEditInStudio = async () => {
+    if (copyingToStudio) return;
+
+    setCopyingToStudio(true);
+    setStudioStatus(null);
+
+    const result = await copyMixlistToStudioAction({ mixlistId });
+
+    if (!result.ok) {
+      setCopyingToStudio(false);
+      setStudioStatus(result.message);
+      return;
+    }
+
+    trackEvent("copied_mixlist_to_studio", {
+      source_mixlist_id: mixlistId,
+      new_tracklist_id: result.tracklistId,
+      is_owner: Boolean(userId && mix?.owner_user_id === userId),
+      song_count: songs.length,
+    });
+
+    router.push(`/tracklists/${result.tracklistId}`);
+  };
+
   const handleExportSpotify = async () => {
     setExportMenuOpen(false);
-    
+
     try {
       const res = await fetch("/api/spotify/export", {
         method: "POST",
@@ -265,14 +310,20 @@ export default function MixlistPage() {
           mixlistId,
         }),
       });
-    
+
       const data = await res.json();
-    
+
       if (!res.ok) {
         alert(data?.error ?? "Spotify export failed.");
         return;
       }
-    
+
+      trackEvent("exported_playlist", {
+        mixlist_id: mixlistId,
+        platform: "spotify",
+        song_count: songs.length,
+      });
+
       if (data?.playlistUrl) {
         window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
       } else {
@@ -284,7 +335,10 @@ export default function MixlistPage() {
     }
   };
 
-  
+  useEffect(() => {
+    receiptTrackedRef.current = false;
+    openedMixlistTrackedRef.current = false;
+  }, [mixlistId]);
 
   // Optional user identity for per-user progress.
   // If anonymous, page should still render; progress just won’t persist.
@@ -297,6 +351,70 @@ export default function MixlistPage() {
     void run();
   }, []);
 
+  // Opening someone else's Mixlist while signed in adds it to Received.
+  useEffect(() => {
+    if (loading) return;
+    if (!userId || !mix?.owner_user_id) return;
+    if (userId === mix.owner_user_id) return;
+    if (receiptTrackedRef.current) return;
+
+    receiptTrackedRef.current = true;
+
+    const recordReceipt = async () => {
+      const now = new Date().toISOString();
+      const { data: existing, error: lookupError } = await supabase
+        .from("mixlist_receipts")
+        .select("first_opened_at")
+        .eq("user_id", userId)
+        .eq("mixlist_id", mixlistId)
+        .maybeSingle();
+
+      if (lookupError) {
+        receiptTrackedRef.current = false;
+        console.error("Failed to check Received Mixlists", lookupError);
+        return;
+      }
+
+      const request = existing
+        ? supabase
+            .from("mixlist_receipts")
+            .update({ last_opened_at: now, archived: false })
+            .eq("user_id", userId)
+            .eq("mixlist_id", mixlistId)
+        : supabase.from("mixlist_receipts").insert({
+            user_id: userId,
+            mixlist_id: mixlistId,
+            first_opened_at: now,
+            last_opened_at: now,
+            archived: false,
+          });
+
+      const { error } = await request;
+
+      if (error) {
+        receiptTrackedRef.current = false;
+        console.error("Failed to add Mixlist to Received", error);
+        return;
+      }
+
+      trackEvent("opened_received_mixlist", {
+        mixlist_id: mixlistId,
+        source: "shared_link",
+        song_count: songs.length,
+      });
+
+      if (!existing) {
+        trackEvent("received_mixlist_added", {
+          mixlist_id: mixlistId,
+          source: "shared_link",
+          song_count: songs.length,
+        });
+      }
+    };
+
+    void recordReceipt();
+  }, [loading, userId, mix?.owner_user_id, mixlistId, songs.length]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -308,7 +426,9 @@ export default function MixlistPage() {
 
       const { data: mixData, error: mixErr } = await supabase
         .from("mixlists")
-        .select("id,title,message,finishing_note,reveal_mode,include_song_notes")
+        .select(
+          "id,title,message,finishing_note,reveal_mode,include_song_notes,owner_user_id",
+        )
         .eq("id", mixlistId)
         .maybeSingle();
 
@@ -371,14 +491,17 @@ export default function MixlistPage() {
     try {
       const saved = window.localStorage.getItem("groovara_preferred_platform");
       if (saved === "spotify" || saved === "youtube" || saved === "apple") {
-      setPreferredPlatform(saved);
+        setPreferredPlatform(saved);
       }
     } catch {}
   }, []);
 
   useEffect(() => {
     try {
-      window.localStorage.setItem("groovara_preferred_platform", preferredPlatform);
+      window.localStorage.setItem(
+        "groovara_preferred_platform",
+        preferredPlatform,
+      );
     } catch {}
   }, [preferredPlatform]);
 
@@ -413,16 +536,21 @@ export default function MixlistPage() {
         const row = data as MixlistProgressRow;
 
         const storedSlots = Number(row.revealed_count ?? 1);
-        const safeSlots = Math.max(1, Math.min(storedSlots, songs.length));
+        const safeSlots = Math.max(0, Math.min(storedSlots, songs.length));
 
         const safeClicked = new Array(songs.length).fill(false);
         if (Array.isArray(row.clicked_json)) {
-          for (let i = 0; i < Math.min(row.clicked_json.length, songs.length); i++) {
+          for (
+            let i = 0;
+            i < Math.min(row.clicked_json.length, songs.length);
+            i++
+          ) {
             safeClicked[i] = row.clicked_json[i] === true;
           }
         }
 
-        for (let i = safeSlots; i < safeClicked.length; i++) safeClicked[i] = false;
+        for (let i = safeSlots; i < safeClicked.length; i++)
+          safeClicked[i] = false;
 
         setRevealedSlots(safeSlots);
         setClicked(safeClicked);
@@ -448,25 +576,24 @@ export default function MixlistPage() {
     }
 
     saveTimerRef.current = window.setTimeout(async () => {
-      const safeSlots = Math.max(1, Math.min(revealedSlots, songs.length));
+      const safeSlots = Math.max(0, Math.min(revealedSlots, songs.length));
 
       const safeClicked = new Array(songs.length).fill(false);
       for (let i = 0; i < Math.min(clicked.length, songs.length); i++) {
         safeClicked[i] = clicked[i] === true;
       }
-      for (let i = safeSlots; i < safeClicked.length; i++) safeClicked[i] = false;
+      for (let i = safeSlots; i < safeClicked.length; i++)
+        safeClicked[i] = false;
 
-      await supabase
-        .from("mixlist_progress")
-        .upsert(
-          {
-            mixlist_id: mixlistId,
-            user_id: userId,
-            revealed_count: safeSlots,
-            clicked_json: safeClicked,
-          },
-          { onConflict: "mixlist_id,user_id" }
-        );
+      await supabase.from("mixlist_progress").upsert(
+        {
+          mixlist_id: mixlistId,
+          user_id: userId,
+          revealed_count: safeSlots,
+          clicked_json: safeClicked,
+        },
+        { onConflict: "mixlist_id,user_id" },
+      );
 
       saveTimerRef.current = null;
     }, 250);
@@ -477,25 +604,37 @@ export default function MixlistPage() {
         saveTimerRef.current = null;
       }
     };
-  }, [progressLoaded, mix?.reveal_mode, userId, songs.length, revealedSlots, clicked, mixlistId]);
+  }, [
+    progressLoaded,
+    mix?.reveal_mode,
+    userId,
+    songs.length,
+    revealedSlots,
+    clicked,
+    mixlistId,
+  ]);
 
   const visibleCount = useMemo(() => {
     if (!mix) return 0;
-    return mix.reveal_mode ? Math.min(revealedSlots, songs.length) : songs.length;
+    return mix.reveal_mode
+      ? Math.min(revealedSlots, songs.length)
+      : songs.length;
   }, [mix, revealedSlots, songs.length]);
 
-  const visibleSongs = useMemo(() => songs.slice(0, visibleCount), [songs, visibleCount]);
+  const visibleSongs = useMemo(
+    () => songs.slice(0, visibleCount),
+    [songs, visibleCount],
+  );
 
   const safeSelectedIndex = useMemo(() => {
     if (visibleSongs.length === 0) return 0;
     return Math.max(0, Math.min(selectedIndex, visibleSongs.length - 1));
   }, [selectedIndex, visibleSongs.length]);
-  
 
   const activeSong = visibleSongs[safeSelectedIndex] ?? null;
   const uiVisibleTracks = useMemo(
     () => visibleSongs.map((song, idx) => toUiTrack(song, idx)),
-    [visibleSongs]
+    [visibleSongs],
   );
   const activeUiTrack = uiVisibleTracks[safeSelectedIndex] ?? null;
 
@@ -512,23 +651,22 @@ export default function MixlistPage() {
       trackId: convertedActiveTrack.track_id ?? null,
     };
   }, [activeUiTrack, convertedActiveTrack]);
-  
 
-    const ambientTrack = useMemo<UiTrack>(() => {
-      if (displayUiTrack) return displayUiTrack;
-      return {
-        id: `mix-${mixlistId}`,
-        title: "Mixlist",
-        artist: "Groovara",
-        album: null,
-        image: null,
-        url: null,
-        platform: "other",
-        durationMs: 1,
-        notes: null,
-        theme: createTheme(`mix-${mixlistId}`, "Mixlist", "Groovara"),
-      };
-    }, [displayUiTrack, mixlistId]);
+  const ambientTrack = useMemo<UiTrack>(() => {
+    if (displayUiTrack) return displayUiTrack;
+    return {
+      id: `mix-${mixlistId}`,
+      title: "Mixlist",
+      artist: "Groovara",
+      album: null,
+      image: null,
+      url: null,
+      platform: "other",
+      durationMs: 1,
+      notes: null,
+      theme: createTheme(`mix-${mixlistId}`, "Mixlist", "Groovara"),
+    };
+  }, [displayUiTrack, mixlistId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -574,7 +712,7 @@ export default function MixlistPage() {
             track_id: activeSong.id,
             url: activeSong.url,
           },
-          preferredPlatform
+          preferredPlatform,
         );
 
         if (!cancelled) {
@@ -593,7 +731,7 @@ export default function MixlistPage() {
                   platform: sourcePlatform,
                   track_id: activeSong.id,
                   url: activeSong.url,
-                }
+                },
           );
         }
       } catch (error) {
@@ -622,8 +760,6 @@ export default function MixlistPage() {
     };
   }, [activeSong, preferredPlatform]);
 
-  
-
   const activeIsHidden = useMemo(() => {
     if (!mix) return false;
     if (!mix.reveal_mode) return false;
@@ -631,14 +767,18 @@ export default function MixlistPage() {
   }, [mix, clicked, safeSelectedIndex]);
 
   useEffect(() => {
-  if (!hasInteracted) return;
-  if (!activeSong) return;
-  if (activeIsHidden) return;
+    if (!hasInteracted) return;
+    if (!activeSong) return;
+    if (activeIsHidden) return;
 
-  
-
-  setAutoplayToken((v) => v + 1);
-  }, [safeSelectedIndex, displayUiTrack?.url, hasInteracted, activeSong, activeIsHidden]);
+    setAutoplayToken((v) => v + 1);
+  }, [
+    safeSelectedIndex,
+    displayUiTrack?.url,
+    hasInteracted,
+    activeSong,
+    activeIsHidden,
+  ]);
 
   const canRevealNext = useMemo(() => {
     if (!mix) return false;
@@ -646,19 +786,81 @@ export default function MixlistPage() {
     return revealedSlots < songs.length;
   }, [mix, revealedSlots, songs.length]);
 
-  const handleRevealNext = () => {
-    setRevealedSlots((r) => {
-      const nextSlots = Math.min(r + 1, songs.length);
-      const nextIndex = Math.max(0, nextSlots - 1);
+  const revealSongAt = (index: number, source: string) => {
+    if (index < 0 || index >= songs.length) return;
+    if (clicked[index] === true) return;
 
-      setSelectedIndex(nextIndex);
-      setClicked((prev) => {
-        const next = [...prev];
-        if (nextIndex < next.length) next[nextIndex] = true;
-        return next;
+    const nextClicked = new Array(songs.length).fill(false);
+    for (let i = 0; i < songs.length; i++) {
+      nextClicked[i] = clicked[i] === true;
+    }
+    nextClicked[index] = true;
+    setClicked(nextClicked);
+
+    const revealedCount = nextClicked.filter(Boolean).length;
+
+    trackEvent("revealed_song", {
+      mixlist_id: mixlistId,
+      song_position: index + 1,
+      revealed_count: revealedCount,
+      total_songs: songs.length,
+      source,
+    });
+
+    if (revealedCount >= songs.length) {
+      trackEvent("completed_mixlist", {
+        mixlist_id: mixlistId,
+        total_songs: songs.length,
       });
+    }
+  };
 
-      return nextSlots;
+  const handleRevealNext = () => {
+    const nextSlots = Math.min(revealedSlots + 1, songs.length);
+    const nextIndex = Math.max(0, nextSlots - 1);
+
+    setRevealedSlots(nextSlots);
+    setSelectedIndex(nextIndex);
+    revealSongAt(nextIndex, "reveal_next");
+  };
+
+  const handleResetRevelations = async () => {
+    if (!mix?.reveal_mode || songs.length === 0) return;
+
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    const resetClicked = new Array(songs.length).fill(false);
+    setRevealedSlots(0);
+    setClicked(resetClicked);
+    setSelectedIndex(0);
+    setHasInteracted(false);
+    setResetStatus("Revelations reset.");
+    window.setTimeout(() => setResetStatus(null), 1600);
+
+    if (userId) {
+      const { error } = await supabase.from("mixlist_progress").upsert(
+        {
+          mixlist_id: mixlistId,
+          user_id: userId,
+          revealed_count: 0,
+          clicked_json: resetClicked,
+        },
+        { onConflict: "mixlist_id,user_id" },
+      );
+
+      if (error) {
+        console.error("Failed to persist revelation reset", error);
+        setResetStatus("Reset locally, but progress could not be saved.");
+      }
+    }
+
+    trackEvent("reset_revelations", {
+      mixlist_id: mixlistId,
+      previous_revealed_count: clicked.filter(Boolean).length,
+      total_songs: songs.length,
     });
   };
 
@@ -691,10 +893,14 @@ export default function MixlistPage() {
   }, [activeSong, safeSelectedIndex, songs]);
 
   useEffect(() => {
+    if (loading || !mix || openedMixlistTrackedRef.current) return;
+
+    openedMixlistTrackedRef.current = true;
     trackEvent("opened_mixlist", {
       mixlist_id: mixlistId,
+      song_count: songs.length,
     });
-  }, [mixlistId]);
+  }, [loading, mix, mixlistId, songs.length]);
 
   const songNoteCard = mix?.include_song_notes ? (
     <div className="gv_row rounded-2xl border border-border p-5">
@@ -729,117 +935,172 @@ export default function MixlistPage() {
     </div>
   ) : null;
 
+  const handlePreferredPlatformChange = (nextPlatform: Platform) => {
+    if (nextPlatform === preferredPlatform) return;
+
+    trackEvent("changed_platform", {
+      mixlist_id: mixlistId,
+      source: "mixlist_page",
+      from_platform: preferredPlatform,
+      to_platform: nextPlatform,
+    });
+
+    setPreferredPlatform(nextPlatform);
+  };
+
   const platformSelectorCard = (
-  <div className="gv_row rounded-2xl p-4">
-    <label className="mb-2 block text-xs tracking-[0.22em] text-muted-foreground">
-      LISTEN ON
-    </label>
+    <div className="gv_row rounded-2xl p-4">
+      <label className="mb-2 block text-xs tracking-[0.22em] text-muted-foreground">
+        LISTEN ON
+      </label>
 
-    <select
-      value={preferredPlatform}
-      onChange={(e) => setPreferredPlatform(e.target.value as Platform)}
-      className="w-full appearance-none rounded-full border border-purple-500/40 bg-black/70 px-4 py-3 text-sm text-white outline-none transition hover:bg-black/80"
-    >
-      <option value="spotify" className="bg-black text-white">
-        Spotify
-      </option>
-      <option value="youtube" className="bg-black text-white">
-        YouTube
-      </option>
-      <option value="apple" className="bg-black text-white">
-        Apple Music
-      </option>
-    </select>
-
-    {convertingTrack ? (
-      <p className="mt-2 text-xs tracking-widest text-muted-foreground">
-        Converting current track...
-      </p>
-    ) : null}
-  </div>
-);
-
-const copyLinkCard = (
-  <div className="gv_row rounded-2xl p-4">
-    <div className="grid grid-cols-2 gap-3">
-      <button
-        onClick={handleCopyLink}
-        className="gv_row gv_accent rounded-full px-4 py-2 text-[11px] tracking-[0.22em] transition"
+      <select
+        value={preferredPlatform}
+        onChange={(e) =>
+          handlePreferredPlatformChange(e.target.value as Platform)
+        }
+        className="w-full appearance-none rounded-full border border-purple-500/40 bg-black/70 px-4 py-3 text-sm text-white outline-none transition hover:bg-black/80"
       >
-        COPY LINK
+        <option value="spotify" className="bg-black text-white">
+          Spotify
+        </option>
+        <option value="youtube" className="bg-black text-white">
+          YouTube
+        </option>
+        <option value="apple" className="bg-black text-white">
+          Apple Music
+        </option>
+      </select>
+
+      {convertingTrack ? (
+        <p className="mt-2 text-xs tracking-widest text-muted-foreground">
+          Converting current track...
+        </p>
+      ) : null}
+    </div>
+  );
+
+  const editInStudioCard = (
+    <div className="gv_row rounded-2xl p-4">
+      <button
+        type="button"
+        onClick={handleEditInStudio}
+        disabled={copyingToStudio}
+        className={purpleActionButton}
+      >
+        {copyingToStudio ? "COPYING TO STUDIO..." : "EDIT IN STUDIO"}
       </button>
 
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setExportMenuOpen((open) => !open)}
-          className="gv_row gv_accent w-full rounded-full px-4 py-2 text-[11px] tracking-[0.22em] transition"
-        >
-          EXPORT
+      {studioStatus ? (
+        <p className="mt-2 text-center text-xs tracking-widest text-muted-foreground">
+          {studioStatus}
+        </p>
+      ) : null}
+    </div>
+  );
+
+  const copyLinkCard = (
+    <div className="gv_row rounded-2xl p-4">
+      <div className="grid grid-cols-2 gap-3">
+        <button onClick={handleCopyLink} className={purpleActionButton}>
+          COPY LINK
         </button>
 
-        {exportMenuOpen ? (
-          <div className="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-2xl border border-border bg-background/95 p-2 shadow-xl backdrop-blur">
-            <button
-              type="button"
-              onClick={handleExportSpotify}
-              className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-foreground transition hover:bg-purple-500/10"
-            >
-              <span>Spotify</span>
-              <span className="text-xs text-purple-300">Export</span>
-            </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setExportMenuOpen((open) => !open)}
+            className={purpleActionButton}
+          >
+            EXPORT
+          </button>
 
-            <button
-              type="button"
-              disabled
-              className="flex w-full cursor-not-allowed items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-muted-foreground opacity-70"
-            >
-              <span>Apple Music</span>
-              <span className="text-[10px] uppercase tracking-widest">
-                Coming soon
-              </span>
-            </button>
+          {exportMenuOpen ? (
+            <div className="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-2xl border border-border bg-background/95 p-2 shadow-xl backdrop-blur">
+              <button
+                type="button"
+                onClick={handleExportSpotify}
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-foreground transition hover:bg-purple-500/10"
+              >
+                <span>Spotify</span>
+                <span className="text-xs text-purple-300">Export</span>
+              </button>
 
-            <button
-              type="button"
-              disabled
-              className="flex w-full cursor-not-allowed items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-muted-foreground opacity-70"
-            >
-              <span>YouTube</span>
-              <span className="text-[10px] uppercase tracking-widest">
-                Coming soon
-              </span>
-            </button>
-          </div>
+              <button
+                type="button"
+                disabled
+                className="flex w-full cursor-not-allowed items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-muted-foreground opacity-70"
+              >
+                <span>Apple Music</span>
+                <span className="text-[10px] uppercase tracking-widest">
+                  Coming soon
+                </span>
+              </button>
+
+              <button
+                type="button"
+                disabled
+                className="flex w-full cursor-not-allowed items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-muted-foreground opacity-70"
+              >
+                <span>YouTube</span>
+                <span className="text-[10px] uppercase tracking-widest">
+                  Coming soon
+                </span>
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {copyStatus ? (
+        <p className="mt-2 text-center text-xs tracking-widest text-muted-foreground">
+          {copyStatus}
+        </p>
+      ) : null}
+    </div>
+  );
+
+  const revealOrBackButton =
+    mix?.reveal_mode &&
+    songs.length > 0 &&
+    (revealedSlots === 0 ||
+      (revealedSlots < songs.length && clicked[0] === true)) ? (
+      <button
+        onClick={handleRevealNext}
+        disabled={!canRevealNext}
+        className={purpleActionButton}
+      >
+        {revealedSlots === 0 ? "REVEAL FIRST" : "REVEAL NEXT"}
+      </button>
+    ) : (
+      <Link
+        href="/mixlists"
+        className={`${purpleActionButton} block text-center`}
+      >
+        BACK TO MIXLISTS
+      </Link>
+    );
+
+  const resetRevelationsButton =
+    mix?.reveal_mode &&
+    songs.length > 0 &&
+    (revealedSlots > 0 || clicked.some(Boolean)) ? (
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={handleResetRevelations}
+          className={purpleActionButton}
+        >
+          RESET REVELATIONS
+        </button>
+
+        {resetStatus ? (
+          <p className="text-center text-xs tracking-widest text-muted-foreground">
+            {resetStatus}
+          </p>
         ) : null}
       </div>
-    </div>
-
-    {copyStatus ? (
-      <p className="mt-2 text-center text-xs tracking-widest text-muted-foreground">
-        {copyStatus}
-      </p>
-    ) : null}
-  </div>
-);
-
-const revealOrBackButton =
-  mix?.reveal_mode && revealedSlots < songs.length && clicked[0] === true ? (
-    <button
-      onClick={handleRevealNext}
-      disabled={!canRevealNext}
-      className="w-full rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv_accent transition hover:bg-purple-500/20 disabled:opacity-50"
-    >
-      REVEAL NEXT
-    </button>
-  ) : (
-    <Link
-      href="/mixlists"
-      className="block w-full rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-center text-xs tracking-widest text-gv_accent transition hover:bg-purple-500/20"
-    >
-      BACK TO MIXLISTS
-    </Link>
-  );
+    ) : null;
 
   if (loading) {
     return (
@@ -914,9 +1175,7 @@ const revealOrBackButton =
               {mix.title || "Untitled Mixlist"}
             </h1>
           </div>
-
         </div>
-
 
         {songs.length === 0 && (
           <div className="mt-6 max-w-3xl">
@@ -950,12 +1209,8 @@ const revealOrBackButton =
                     setHasInteracted(true);
                     setSelectedIndex(safeSelectedIndex);
 
-                    if (mix.reveal_mode && clicked[safeSelectedIndex] !== true) {
-                      setClicked((prev) => {
-                        const next = [...prev];
-                        next[safeSelectedIndex] = true;
-                        return next;
-                      });
+                    if (mix.reveal_mode) {
+                      revealSongAt(safeSelectedIndex, "player_play");
                     }
                   }}
                   onReveal={() => {
@@ -963,11 +1218,7 @@ const revealOrBackButton =
                     setSelectedIndex(safeSelectedIndex);
 
                     if (mix.reveal_mode) {
-                      setClicked((prev) => {
-                        const next = [...prev];
-                        next[safeSelectedIndex] = true;
-                        return next;
-                      });
+                      revealSongAt(safeSelectedIndex, "player_reveal");
                     }
                   }}
                   disabledReason={
@@ -980,7 +1231,7 @@ const revealOrBackButton =
                   onNext={() => {
                     setHasInteracted(true);
                     setSelectedIndex(
-                      Math.min(visibleSongs.length - 1, safeSelectedIndex + 1)
+                      Math.min(visibleSongs.length - 1, safeSelectedIndex + 1),
                     );
                   }}
                   disabledPrev={safeSelectedIndex === 0}
@@ -996,9 +1247,11 @@ const revealOrBackButton =
             <div className="space-y-4 xl:hidden">
               {messageCard}
               {platformSelectorCard}
+              {editInStudioCard}
               {copyLinkCard}
               {songNoteCard}
               {revealOrBackButton}
+              {resetRevelationsButton}
             </div>
 
             <div className="gv_row space-y-2 rounded-3xl p-3">
@@ -1013,11 +1266,7 @@ const revealOrBackButton =
                       onClick={() => {
                         setHasInteracted(true);
                         setSelectedIndex(idx);
-                        setClicked((prev) => {
-                          const next = [...prev];
-                          next[idx] = true;
-                          return next;
-                        });
+                        revealSongAt(idx, "song_list");
                       }}
                       className="gv_row block w-full rounded-2xl px-4 py-4 text-left transition"
                     >
@@ -1092,9 +1341,11 @@ const revealOrBackButton =
             <div className="sticky top-8 space-y-4">
               {messageCard}
               {platformSelectorCard}
+              {editInStudioCard}
               {copyLinkCard}
               {songNoteCard}
               {revealOrBackButton}
+              {resetRevelationsButton}
             </div>
           </div>
         </div>

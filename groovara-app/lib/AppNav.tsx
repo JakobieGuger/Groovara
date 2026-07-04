@@ -43,12 +43,6 @@ export default function AppNav() {
       description: "Shape songs, notes, and pacing",
       href: "/tracklists",
     },
-    {
-      type: "link",
-      label: "Mixlists",
-      description: "Revisit what you have shared",
-      href: "/mixlists",
-    },
     { type: "divider" },
     {
       type: "link",
