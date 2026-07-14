@@ -11,23 +11,30 @@ const deleteTracklistSchema = z.object({
   tracklistId: z.string().uuid("Invalid tracklist id."),
 });
 
-const importedTrackSchema = z.object({
-  platform: z.literal("spotify"),
+const importedPlatformTrackSchema = z.object({
+  platform: z.enum(["spotify", "youtube", "apple"]),
   track_id: z.string().trim().min(1, "Track ID is required."),
   title: z.string().trim().min(1, "Song title is required.").max(300),
-  artist: z.string().trim().min(1, "Artist is required.").max(200),
+  artist: z.preprocess(
+    (value) => {
+      if (typeof value !== "string") return value;
+      const trimmed = value.trim();
+      return trimmed === "" ? "Unknown Artist" : trimmed;
+    },
+    z.string().max(200).default("Unknown Artist"),
+  ),
   album: z.preprocess(
     (value) => {
       if (typeof value !== "string") return value;
       const trimmed = value.trim();
       return trimmed === "" ? null : trimmed;
     },
-    z.string().max(200).nullable()
+    z.string().max(200).nullable().default(null),
   ),
   url: z.string().trim().url("URL must be valid.").max(2048),
 });
 
-const importSpotifyTracklistSchema = z.object({
+const importPlatformTracklistSchema = z.object({
   playlistName: z
     .string()
     .trim()
@@ -39,9 +46,11 @@ const importSpotifyTracklistSchema = z.object({
       const trimmed = value.trim();
       return trimmed === "" ? null : trimmed;
     },
-    z.string().max(1000).nullable()
+    z.string().max(1000).nullable().default(null),
   ),
-  tracks: z.array(importedTrackSchema).min(1, "At least one track is required."),
+  tracks: z
+    .array(importedPlatformTrackSchema)
+    .min(1, "At least one track is required."),
 });
 
 type DeleteTracklistResult =
@@ -52,9 +61,14 @@ type DeleteTracklistResult =
       fieldErrors: Record<string, string[] | undefined>;
       formErrors: string[];
     }
-  | { ok: false; type: "auth" | "db" | "not_found" | "rate_limit"; message: string; resetAtIso?: string};
+  | {
+      ok: false;
+      type: "auth" | "db" | "not_found" | "rate_limit";
+      message: string;
+      resetAtIso?: string;
+    };
 
-type ImportSpotifyTracklistResult =
+type ImportPlatformTracklistResult =
   | { ok: true; tracklistId: string }
   | {
       ok: false;
@@ -62,10 +76,15 @@ type ImportSpotifyTracklistResult =
       fieldErrors: Record<string, string[] | undefined>;
       formErrors: string[];
     }
-  | { ok: false; type: "auth" | "db" | "rate_limit"; message: string; resetAtIso?: string };
+  | {
+      ok: false;
+      type: "auth" | "db" | "rate_limit";
+      message: string;
+      resetAtIso?: string;
+    };
 
 export async function deleteTracklistAction(
-  rawInput: unknown
+  rawInput: unknown,
 ): Promise<DeleteTracklistResult> {
   const parsed = deleteTracklistSchema.safeParse(rawInput);
 
@@ -95,7 +114,7 @@ export async function deleteTracklistAction(
     };
   }
 
-    const rateLimit = await enforceRateLimit({
+  const rateLimit = await enforceRateLimit({
     action: "delete_tracklist",
     ...RATE_LIMITS.delete_tracklist,
     metadata: {
@@ -160,7 +179,10 @@ export async function deleteTracklistAction(
     };
   }
 
-  const { error } = await supabase.from("tracklists").delete().eq("id", tracklistId);
+  const { error } = await supabase
+    .from("tracklists")
+    .delete()
+    .eq("id", tracklistId);
 
   if (error) {
     return {
@@ -176,10 +198,10 @@ export async function deleteTracklistAction(
   return { ok: true };
 }
 
-export async function importSpotifyTracklistAction(
-  rawInput: unknown
-): Promise<ImportSpotifyTracklistResult> {
-  const parsed = importSpotifyTracklistSchema.safeParse(rawInput);
+export async function importPlatformTracklistAction(
+  rawInput: unknown,
+): Promise<ImportPlatformTracklistResult> {
+  const parsed = importPlatformTracklistSchema.safeParse(rawInput);
 
   if (!parsed.success) {
     const flattened = parsed.error.flatten();
@@ -192,6 +214,7 @@ export async function importSpotifyTracklistAction(
   }
 
   const input = parsed.data;
+  const primaryPlatform = input.tracks[0]?.platform ?? "unknown";
   const supabase = await createClient();
 
   const {
@@ -207,11 +230,14 @@ export async function importSpotifyTracklistAction(
     };
   }
 
-    const rateLimit = await enforceRateLimit({
+  // Reuse the existing import limiter so this patch does not require changes
+  // to the rate-limit action/type config yet. Metadata still records platform.
+  const rateLimit = await enforceRateLimit({
     action: "spotify_import",
     ...RATE_LIMITS.spotify_import,
     metadata: {
       source: "app/tracklists/actions.ts",
+      platform: primaryPlatform,
       trackCount: input.tracks.length,
       playlistName: input.playlistName,
     },
@@ -232,6 +258,7 @@ export async function importSpotifyTracklistAction(
       user_id: user.id,
       title: input.playlistName,
       description: input.playlistDescription,
+      status: "draft",
     })
     .select("id")
     .single();
@@ -257,7 +284,9 @@ export async function importSpotifyTracklistAction(
     version: null,
   }));
 
-  const { error: songsError } = await supabase.from("tracklist_songs").insert(rows);
+  const { error: songsError } = await supabase
+    .from("tracklist_songs")
+    .insert(rows);
 
   if (songsError) {
     return {
@@ -271,4 +300,12 @@ export async function importSpotifyTracklistAction(
   revalidatePath(`/tracklists/${tracklist.id}`);
 
   return { ok: true, tracklistId: tracklist.id };
+}
+
+// Backward-compatible export so the current /tracklists page can keep importing
+// importSpotifyTracklistAction while the action itself now accepts all platforms.
+export async function importSpotifyTracklistAction(
+  rawInput: unknown,
+): Promise<ImportPlatformTracklistResult> {
+  return importPlatformTracklistAction(rawInput);
 }

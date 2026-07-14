@@ -8,6 +8,44 @@ import InlineNotice from "../../lib/InlineNotice";
 import { deleteTracklistAction, importSpotifyTracklistAction } from "./actions";
 
 type StudioSection = "progress" | "sent" | "received";
+type ImportPlatform = "spotify" | "youtube" | "apple";
+
+const IMPORT_PLATFORM_COPY: Record<
+  ImportPlatform,
+  {
+    label: string;
+    helper: string;
+    placeholder: string;
+    disabled?: boolean;
+  }
+> = {
+  spotify: {
+    label: "Spotify",
+    helper: "Paste a public Spotify playlist URL to turn it into a Studio draft.",
+    placeholder: "https://open.spotify.com/playlist/...",
+  },
+  youtube: {
+    label: "YouTube",
+    helper: "Paste a public YouTube playlist URL to turn it into a Studio draft.",
+    placeholder: "https://www.youtube.com/playlist?list=...",
+  },
+  apple: {
+    label: "Apple Music",
+    helper: "Paste a public Apple Music playlist URL to turn it into a Studio draft.",
+    placeholder: "https://music.apple.com/us/playlist/...",
+  },
+};
+
+type ImportedPlaylistTrack = {
+  platform: "spotify" | "youtube" | "apple";
+  track_id: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  url: string;
+  thumbnail_url?: string | null;
+  channel_title?: string | null;
+};
 
 type Tracklist = {
   id: string;
@@ -64,9 +102,6 @@ type CountSummary = {
   songs: number;
   notes: number;
 };
-
-const accentLink =
-  "text-xs tracking-[0.2em] text-[#57577F] transition hover:text-[#393956] dark:text-[#CED7DF] dark:hover:text-white";
 
 function getActionError(result: {
   type: string;
@@ -152,11 +187,14 @@ export default function TracklistsPage() {
   );
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [importPlatform, setImportPlatform] = useState<ImportPlatform>("spotify");
   const [importUrl, setImportUrl] = useState("");
   const [importErr, setImportErr] = useState<string | null>(null);
   const [importBusy, setImportBusy] = useState(false);
   const [removingKey, setRemovingKey] = useState<string | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const initialTabTrackedRef = useRef(false);
 
   const load = async () => {
@@ -318,6 +356,30 @@ export default function TracklistsPage() {
     });
   }, []);
 
+  useEffect(() => {
+    if (!actionMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!actionMenuRef.current?.contains(event.target as Node)) {
+        setActionMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActionMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [actionMenuOpen]);
+
   const remove = async (id: string) => {
     if (!confirm("Delete this draft?")) return;
 
@@ -443,17 +505,25 @@ export default function TracklistsPage() {
     }
   };
 
-  const runSpotifyImport = async () => {
+  const runPlaylistImport = async () => {
     setImportErr(null);
+
     const url = importUrl.trim();
     if (!url) {
-      setImportErr("Paste a Spotify playlist URL.");
+      setImportErr(`Paste a ${IMPORT_PLATFORM_COPY[importPlatform].label} playlist URL.`);
       return;
     }
 
     setImportBusy(true);
     try {
-      const response = await fetch("/api/spotify/playlist", {
+      const endpoint =
+        importPlatform === "spotify"
+          ? "/api/spotify/playlist"
+          : importPlatform === "youtube"
+            ? "/api/youtube/import"
+            : "/api/apple/import";
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
@@ -466,17 +536,8 @@ export default function TracklistsPage() {
       const playlistDescription: string | null =
         json.playlist?.description ?? null;
 
-      type ImportedTrack = {
-        platform: "spotify";
-        track_id: string;
-        title: string;
-        artist: string;
-        album: string | null;
-        url: string;
-      };
-
-      const tracks: ImportedTrack[] = Array.isArray(json.tracks)
-        ? (json.tracks as ImportedTrack[])
+      const tracks: ImportedPlaylistTrack[] = Array.isArray(json.tracks)
+        ? (json.tracks as ImportedPlaylistTrack[])
         : [];
 
       if (tracks.length === 0) {
@@ -487,14 +548,22 @@ export default function TracklistsPage() {
         playlistName,
         playlistDescription,
         tracks,
-      });
+      } as never);
 
       if (!result.ok) throw new Error(getActionError(result));
 
-      trackEvent("imported_spotify_playlist", {
-        tracklist_id: result.tracklistId,
-        song_count: tracks.length,
-      });
+      trackEvent(
+        importPlatform === "spotify"
+          ? "imported_spotify_playlist"
+          : importPlatform === "youtube"
+            ? "imported_youtube_playlist"
+            : "imported_apple_playlist",
+        {
+          tracklist_id: result.tracklistId,
+          song_count: tracks.length,
+          truncated: Boolean(json.truncated),
+        },
+      );
 
       setImportOpen(false);
       setImportUrl("");
@@ -547,14 +616,72 @@ export default function TracklistsPage() {
   return (
     <main className="gv-paper-bg min-h-screen">
       <div className="gv-paper-content mx-auto max-w-6xl px-5 pb-16 pt-24 sm:px-8 lg:px-12">
-        <div className="flex flex-wrap items-center justify-end gap-5">
-          <button onClick={() => setImportOpen(true)} className={accentLink}>
-            IMPORT PLAYLIST
-          </button>
+        <div className="flex items-center justify-start">
+          <div ref={actionMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setActionMenuOpen((open) => !open)}
+              aria-haspopup="menu"
+              aria-expanded={actionMenuOpen}
+              className="inline-flex min-h-11 items-center gap-3 rounded-full border border-[#57577F]/35 bg-[#57577F] px-5 py-2.5 text-[11px] font-semibold tracking-[0.18em] text-[#fff8ec] shadow-[0_10px_26px_rgba(87,87,127,0.22)] transition hover:-translate-y-0.5 hover:bg-[#49496d] hover:shadow-[0_14px_30px_rgba(87,87,127,0.28)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#57577F]/40 dark:border-[#CED7DF]/20 dark:bg-[#57577F] dark:text-white dark:hover:bg-[#66668f] dark:focus-visible:ring-[#CED7DF]/40"
+            >
+              NEW MIXLIST
+              <span
+                aria-hidden="true"
+                className={`text-[10px] transition-transform ${
+                  actionMenuOpen ? "rotate-180" : "rotate-0"
+                }`}
+              >
+                ▾
+              </span>
+            </button>
 
-          <Link href="/tracklists/new" className={accentLink}>
-            NEW MIXLIST
-          </Link>
+            {actionMenuOpen ? (
+              <div
+                role="menu"
+                className="absolute left-0 top-full z-30 mt-3 w-56 overflow-hidden rounded-2xl border border-[#cfc3ad] bg-[#fff8ec]/98 p-2 text-[#292521] shadow-[0_18px_42px_rgba(64,47,31,0.18)] backdrop-blur-xl dark:border-white/10 dark:bg-[#111113]/98 dark:text-white dark:shadow-[0_18px_42px_rgba(0,0,0,0.42)]"
+              >
+                <Link
+                  href="/tracklists/new"
+                  role="menuitem"
+                  onClick={() => {
+                    setActionMenuOpen(false);
+                    trackEvent("studio_create_selected", {
+                      source: "studio_action_menu",
+                    });
+                  }}
+                  className="block rounded-xl px-4 py-3 transition hover:bg-[#57577F]/10 hover:text-[#3f3f63] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#57577F]/30 dark:hover:bg-white/10 dark:hover:text-[#CED7DF] dark:focus-visible:ring-[#CED7DF]/30"
+                >
+                  <span className="block text-sm font-semibold tracking-[0.04em]">
+                    Create
+                  </span>
+                  <span className="mt-1 block text-xs leading-snug text-[#6b635b] dark:text-white/45">
+                    Start a blank Studio draft.
+                  </span>
+                </Link>
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setActionMenuOpen(false);
+                    setImportOpen(true);
+                    trackEvent("studio_import_selected", {
+                      source: "studio_action_menu",
+                    });
+                  }}
+                  className="mt-1 block w-full rounded-xl px-4 py-3 text-left transition hover:bg-[#57577F]/10 hover:text-[#3f3f63] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#57577F]/30 dark:hover:bg-white/10 dark:hover:text-[#CED7DF] dark:focus-visible:ring-[#CED7DF]/30"
+                >
+                  <span className="block text-sm font-semibold tracking-[0.04em]">
+                    Import
+                  </span>
+                  <span className="mt-1 block text-xs leading-snug text-[#6b635b] dark:text-white/45">
+                    Bring in a public playlist.
+                  </span>
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <nav
@@ -838,10 +965,11 @@ export default function TracklistsPage() {
                   <p className="text-xs tracking-[0.2em] text-[#6b635b] dark:text-white/45">
                     IMPORT PLAYLIST
                   </p>
-                  <h3 className="mt-2 text-xl font-medium">Spotify, for now</h3>
+                  <h3 className="mt-2 text-xl font-medium">
+                    Choose a platform
+                  </h3>
                   <p className="mt-2 text-sm text-[#6b635b] dark:text-white/45">
-                    Paste a public Spotify playlist URL to turn it into a new
-                    Studio draft.
+                    {IMPORT_PLATFORM_COPY[importPlatform].helper}
                   </p>
                 </div>
 
@@ -858,16 +986,41 @@ export default function TracklistsPage() {
                 </button>
               </div>
 
-              <div className="mt-5">
-                <label className="block text-xs tracking-[0.18em] text-[#6b635b] dark:text-white/45">
-                  PLAYLIST URL
+              <div className="mt-5 grid gap-4">
+                <label className="block">
+                  <span className="block text-xs tracking-[0.18em] text-[#6b635b] dark:text-white/45">
+                    PLATFORM
+                  </span>
+                  <select
+                    value={importPlatform}
+                    onChange={(event) => {
+                      setImportPlatform(event.target.value as ImportPlatform);
+                      setImportErr(null);
+                    }}
+                    disabled={importBusy}
+                    className="mt-2 w-full rounded-xl border border-[#57577F]/25 bg-[#57577F] px-4 py-3 text-sm font-semibold tracking-[0.08em] text-[#fff8ec] outline-none transition hover:bg-[#4b4b73] focus:border-[#57577F]/55 disabled:cursor-wait disabled:opacity-60 dark:border-[#CED7DF]/20 dark:bg-[#57577F] dark:text-white dark:hover:bg-[#66668f] dark:focus:border-[#CED7DF]/40"
+                  >
+                    <option value="spotify">Spotify</option>
+                    <option value="youtube">YouTube</option>
+                    <option value="apple">Apple Music</option>
+                  </select>
                 </label>
-                <input
-                  value={importUrl}
-                  onChange={(event) => setImportUrl(event.target.value)}
-                  placeholder="https://open.spotify.com/playlist/..."
-                  className="mt-2 w-full rounded-xl border border-[#cfc3ad] bg-white/55 px-4 py-3 text-[#292521] outline-none transition focus:border-[#57577F]/55 dark:border-white/10 dark:bg-black/20 dark:text-white dark:focus:border-[#CED7DF]/40"
-                />
+
+                <label className="block">
+                  <span className="block text-xs tracking-[0.18em] text-[#6b635b] dark:text-white/45">
+                    PLAYLIST URL
+                  </span>
+                  <input
+                    value={importUrl}
+                    onChange={(event) => setImportUrl(event.target.value)}
+                    placeholder={IMPORT_PLATFORM_COPY[importPlatform].placeholder}
+                    disabled={
+                      importBusy ||
+                      Boolean(IMPORT_PLATFORM_COPY[importPlatform].disabled)
+                    }
+                    className="mt-2 w-full rounded-xl border border-[#cfc3ad] bg-white/55 px-4 py-3 text-[#292521] outline-none transition focus:border-[#57577F]/55 disabled:cursor-not-allowed disabled:opacity-55 dark:border-white/10 dark:bg-black/20 dark:text-white dark:focus:border-[#CED7DF]/40"
+                  />
+                </label>
               </div>
 
               {importErr ? (
@@ -883,11 +1036,18 @@ export default function TracklistsPage() {
               <div className="mt-5 flex flex-wrap items-center gap-3">
                 <button
                   type="button"
-                  onClick={runSpotifyImport}
-                  disabled={importBusy}
-                  className="rounded-full border border-[#57577F]/35 bg-[#57577F]/10 px-6 py-3 text-xs tracking-[0.18em] text-[#3f3f63] transition hover:bg-[#57577F]/15 disabled:opacity-50 dark:border-[#CED7DF]/30 dark:bg-[#CED7DF]/10 dark:text-[#CED7DF] dark:hover:bg-[#CED7DF]/15"
+                  onClick={runPlaylistImport}
+                  disabled={
+                    importBusy ||
+                    Boolean(IMPORT_PLATFORM_COPY[importPlatform].disabled)
+                  }
+                  className="rounded-full border border-[#57577F]/35 bg-[#57577F] px-6 py-3 text-xs font-semibold tracking-[0.18em] text-[#fff8ec] transition hover:bg-[#49496d] disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#CED7DF]/20 dark:bg-[#57577F] dark:text-white dark:hover:bg-[#66668f]"
                 >
-                  {importBusy ? "IMPORTING…" : "IMPORT"}
+                  {importBusy
+                    ? "IMPORTING…"
+                    : IMPORT_PLATFORM_COPY[importPlatform].disabled
+                      ? "COMING NEXT"
+                      : "IMPORT"}
                 </button>
 
                 <span className="text-xs tracking-[0.12em] text-[#7b746c] dark:text-white/35">
@@ -897,6 +1057,7 @@ export default function TracklistsPage() {
             </div>
           </div>
         ) : null}
+
       </div>
     </main>
   );
