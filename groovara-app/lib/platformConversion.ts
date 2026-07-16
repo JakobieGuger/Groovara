@@ -6,6 +6,7 @@ export type ConvertibleTrack = {
   platform: Platform;
   track_id: string;
   url?: string;
+  isrc?: string | null;
 };
 
 export async function convertTrackPlatform(
@@ -27,6 +28,7 @@ export async function convertTrackPlatform(
         sourceUrl: track.url ?? "",
         sourceTitle: track.title,
         sourceArtist: track.artist,
+        sourceIsrc: track.isrc ?? null,
         targetPlatform: preferredPlatform,
       }),
     });

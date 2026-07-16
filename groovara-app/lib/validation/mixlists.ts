@@ -98,6 +98,19 @@ export const mixlistSongSchema = z.object({
   artist: requiredText("Artist", MAX.artist),
   album: optionalText("Album", MAX.album),
   url: externalUrlSchema,
+  isrc: z.preprocess(
+    (value) => {
+      if (typeof value !== "string") return null;
+
+      const normalized = value
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "");
+
+      return normalized === "" ? null : normalized;
+    },
+    z.string().max(32).nullable(),
+  ),
   note: optionalText("Song note", MAX.note),
 });
 

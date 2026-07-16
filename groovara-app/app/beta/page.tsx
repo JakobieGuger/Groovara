@@ -45,25 +45,6 @@ export default async function BetaPage({
 
           <div className="my-8 h-px w-full bg-border" />
 
-          {!code ? (
-            <div className="mx-auto mt-6 max-w-md rounded-2xl border border-[#57577F]/20 bg-[#CED7DF]/30 px-5 py-5 shadow-[0_10px_30px_rgba(64,47,31,0.06)] dark:border-[#CED7DF]/15 dark:bg-white/[0.04] dark:shadow-none">
-              <p className="text-sm font-semibold text-foreground">
-                Don&apos;t have a code yet?
-              </p>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Tell us a little about yourself and request an invitation to
-                help shape Groovara while it&apos;s still taking form.
-              </p>
-
-              <Link
-                href="/access"
-                className="mt-4 inline-flex min-w-[180px] items-center justify-center rounded-full border border-[#57577F]/25 bg-[#57577F] px-6 py-3 text-sm font-semibold tracking-wide text-[#f7f2e8] shadow-[0_10px_24px_rgba(87,87,127,0.20)] transition hover:-translate-y-0.5 hover:bg-[#49496c] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#57577F]/45 dark:border-[#CED7DF]/20 dark:text-white dark:hover:bg-[#66668f]"
-              >
-                Request a Code
-              </Link>
-            </div>
-          ) : null}
-
           {code ? (
             <div className="mx-auto mt-6 max-w-sm rounded-2xl border border-purple-500/30 bg-purple-500/10 px-4 py-4">
               <p className="text-[11px] uppercase tracking-[0.2em] text-purple-300">

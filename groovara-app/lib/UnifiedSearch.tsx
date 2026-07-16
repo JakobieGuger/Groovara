@@ -14,6 +14,7 @@ export type UnifiedSearchResult = {
 
   url: string;
   image: string | null;
+  isrc: string | null;
 };
 
 export default function UnifiedSearch({
@@ -73,6 +74,7 @@ export default function UnifiedSearch({
             album?: string | null;
             url: string;
             image?: string | null;
+            isrc?: string | null;
           }>;
           error?: string;
         };
@@ -86,16 +88,19 @@ export default function UnifiedSearch({
           setErr(json.error ?? `Search failed (${res.status})`);
           return;
         }
-
-        const normalized: UnifiedSearchResult[] = (json.tracks ?? []).map((r) => ({
-          platform,
-          track_id: r.id,
-          title: r.title,
-          artist: r.artist,
-          album: r.album ?? null,
-          url: r.url,
-          image: r.image ?? null,
-        }));
+    
+    const normalized: UnifiedSearchResult[] = (json.tracks ?? []).map(
+      (r) => ({
+        platform,
+        track_id: r.id,
+        title: r.title,
+        artist: r.artist,
+        album: r.album ?? null,
+        url: r.url,
+        image: r.image ?? null,
+        isrc: r.isrc ?? null,
+      }),
+    );
 
         setResults(normalized);
       } catch (e: unknown) {

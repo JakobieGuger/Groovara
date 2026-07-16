@@ -37,6 +37,7 @@ type TrackSong = {
   artist: string;
   album: string | null;
   url: string;
+  isrc: string | null;
   note: string | null;
   platform: string | null;
   track_id: string | null;
@@ -308,7 +309,7 @@ export default function TracklistDetailPage() {
     const { data, error } = await supabase
       .from("tracklist_songs")
       .select(
-        "id,tracklist_id,position,title,artist,album,url,note,platform,track_id",
+        "id,tracklist_id,position,title,artist,album,url,note,platform,track_id,isrc",
       )
       .eq("tracklist_id", id)
       .order("position", { ascending: true });
@@ -380,7 +381,7 @@ export default function TracklistDetailPage() {
       const { data: songData, error: songError } = await supabase
         .from("tracklist_songs")
         .select(
-          "id,tracklist_id,position,title,artist,album,url,note,platform,track_id",
+          "id,tracklist_id,position,title,artist,album,url,note,platform,track_id,isrc",
         )
         .eq("tracklist_id", id)
         .order("position", { ascending: true });
@@ -500,6 +501,7 @@ export default function TracklistDetailPage() {
       artist: t.artist,
       album: t.album || null,
       url: t.url,
+      isrc: t.isrc ?? null,
     });
 
     if (!result.ok) {
@@ -751,6 +753,7 @@ export default function TracklistDetailPage() {
           artist: s.artist,
           album: s.album,
           url: s.url,
+          isrc: s.isrc,
           note: s.note,
         })),
     });
@@ -805,19 +808,10 @@ export default function TracklistDetailPage() {
   return (
     <main className="gv-paper-bg min-h-screen">
       <div className="gv-paper-content">
-        <div className="flex items-center justify-between">
-          <div className="flex-1 text-center">
-            <h1 className="text-3xl font-semibold tracking-wide text-gv-accent">
-              {item?.title}
-            </h1>
-          </div>
-
-          <button
-            onClick={remove}
-            className="text-xs tracking-widest text-gray-400 hover:text-red-300 transition"
-          >
-            DELETE
-          </button>
+        <div className="text-center">
+          <h1 className="text-3xl font-semibold tracking-wide text-gv-accent">
+            {item?.title}
+          </h1>
         </div>
 
         {!loading && songs.length === 0 && !pageError && (
@@ -864,7 +858,7 @@ export default function TracklistDetailPage() {
             />
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={save}
               disabled={saving}
@@ -875,10 +869,19 @@ export default function TracklistDetailPage() {
 
             <Link
               href="/tracklists"
-              className="text-xs tracking-widest text-gray-400 hover:text-purple-300 transition"
+              className="px-2 text-xs tracking-widest text-gray-400 transition hover:text-purple-300"
             >
               ← BACK
             </Link>
+
+            <button
+              type="button"
+              onClick={remove}
+              disabled={busy}
+              className="rounded-full border border-red-500/45 bg-red-500/10 px-5 py-3 text-xs tracking-widest text-red-700 transition hover:border-red-500/70 hover:bg-red-500/20 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-300 dark:hover:text-red-200"
+            >
+              DELETE DRAFT
+            </button>
           </div>
         </div>
 
@@ -895,51 +898,7 @@ export default function TracklistDetailPage() {
           </button>
         </div>
 
-        <button
-          onClick={async () => {
-            try {
-              const {
-                data: { session },
-              } = await supabase.auth.getSession();
 
-              const res = await fetch("/api/spotify/export", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  ...(session?.access_token
-                    ? { Authorization: `Bearer ${session.access_token}` }
-                    : {}),
-                },
-                body: JSON.stringify({ tracklistId: String(id) }),
-              });
-
-              const data: {
-                success?: boolean;
-                playlistUrl?: string | null;
-                exportedCount?: number;
-                error?: string;
-              } = await res.json();
-
-              if (!res.ok) {
-                alert(data.error ?? "Export failed");
-                return;
-              }
-
-              if (data.playlistUrl) {
-                window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
-              } else {
-                alert(
-                  `Exported ${data.exportedCount ?? 0} tracks. (No URL returned)`,
-                );
-              }
-            } catch {
-              alert("Export failed");
-            }
-          }}
-          className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-500"
-        >
-          Export to Spotify
-        </button>
         {multiNoteMode ? (
           <div className="mt-4 max-w-xl rounded-2xl gv-row border border-white/10 bg-white/5 p-5">
             <div className="flex items-start justify-between gap-4">

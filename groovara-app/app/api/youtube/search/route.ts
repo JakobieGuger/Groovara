@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  claimYouTubeAutomaticSearchBudget,
+} from "@/lib/youtubeSearchBudget";
 
 export const runtime = "nodejs";
 
@@ -77,8 +80,32 @@ export async function GET(req: Request) {
       );
     }
 
-    const { searchParams } = new URL(req.url);
-    const q = (searchParams.get("q") ?? "").trim();
+  const { searchParams } = new URL(req.url);
+  const q = (searchParams.get("q") ?? "").trim();
+  const usage = (searchParams.get("usage") ?? "").trim();
+    
+  if (!q) {
+    return NextResponse.json({ tracks: [] });
+  }
+  
+  let automaticSearchBudget = null;
+  
+  if (usage === "automatic") {
+    automaticSearchBudget =
+      await claimYouTubeAutomaticSearchBudget(1);
+  
+    if (!automaticSearchBudget.allowed) {
+      return NextResponse.json(
+        {
+          error:
+            "Groovara's automatic YouTube search budget has been reached for today.",
+          code: "youtube_search_budget_exhausted",
+          budget: automaticSearchBudget,
+        },
+        { status: 429 },
+      );
+    }
+  }
     if (!q) return NextResponse.json({ tracks: [] });
 
     // Search videos only; "music video" bias via query is a decent first pass.
@@ -138,7 +165,10 @@ export async function GET(req: Request) {
 
     await cacheYouTubeTracks(tracks);
 
-    return NextResponse.json({ tracks });
+  return NextResponse.json({
+    tracks,
+    automaticSearchBudget,
+  });
   } catch (e: unknown) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "YouTube route error" },

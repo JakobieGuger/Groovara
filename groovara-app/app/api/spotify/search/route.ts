@@ -68,6 +68,9 @@ export async function GET(req: Request) {
       artists?: SpotifyArtist[];
       album?: SpotifyAlbum;
       external_urls?: { spotify?: string };
+      external_ids?: {
+        isrc?: string;
+      };
     };
     type SpotifySearchResponse = { tracks?: { items?: SpotifyTrack[] } };
 
@@ -80,7 +83,11 @@ export async function GET(req: Request) {
       artist: (t.artists ?? []).map((a) => a.name).join(", "),
       album: t.album?.name ?? "",
       url: t.external_urls?.spotify ?? "",
-      image: t.album?.images?.[2]?.url ?? t.album?.images?.[1]?.url ?? null,
+      image:
+        t.album?.images?.[2]?.url ??
+        t.album?.images?.[1]?.url ??
+        null,
+     isrc: t.external_ids?.isrc ?? null,
     }));
 
     return NextResponse.json({ tracks });

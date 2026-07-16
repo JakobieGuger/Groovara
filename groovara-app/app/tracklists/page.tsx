@@ -174,6 +174,29 @@ function metadataLine(parts: Array<string | null | undefined>) {
   return parts.filter(Boolean).join(" • ");
 }
 
+function GroovaraRingMark({
+  className,
+}: {
+  className: string;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`pointer-events-none block ${className}`}
+      style={{
+        WebkitMaskImage: 'url("/groovara-rings-3-2-mask.png")',
+        maskImage: 'url("/groovara-rings-3-2-mask.png")',
+        WebkitMaskRepeat: "no-repeat",
+        maskRepeat: "no-repeat",
+        WebkitMaskPosition: "center",
+        maskPosition: "center",
+        WebkitMaskSize: "contain",
+        maskSize: "contain",
+      }}
+    />
+  );
+}
+
 export default function TracklistsPage() {
   const [activeSection, setActiveSection] = useState<StudioSection>("progress");
   const [drafts, setDrafts] = useState<Tracklist[]>([]);
@@ -196,6 +219,14 @@ export default function TracklistsPage() {
   const [removingKey, setRemovingKey] = useState<string | null>(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const initialTabTrackedRef = useRef(false);
+
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+
+    if (tab === "sent" || tab === "received") {
+      setActiveSection(tab);
+    }
+  }, []);
 
   const load = async () => {
     setErr(null);
@@ -589,15 +620,33 @@ export default function TracklistsPage() {
 
     initialTabTrackedRef.current = true;
     trackEvent("studio_tab_viewed", {
-      tab: "in_progress",
-      item_count: drafts.length,
+      tab:
+        activeSection === "progress"
+          ? "in_progress"
+          : activeSection,
+      item_count: currentCount,
     });
-  }, [loading, err, drafts.length]);
+  }, [loading, err, activeSection, currentCount]);
 
   const handleSectionChange = (section: StudioSection) => {
     if (section === activeSection) return;
 
     setActiveSection(section);
+
+    const url = new URL(window.location.href);
+
+    if (section === "progress") {
+      url.searchParams.delete("tab");
+    } else {
+      url.searchParams.set("tab", section);
+    }
+
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+
     trackEvent("studio_tab_viewed", {
       tab: section === "progress" ? "in_progress" : section,
       item_count: sectionCount[section],
@@ -709,12 +758,7 @@ export default function TracklistsPage() {
                 }`}
               >
                 {active ? (
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute left-1/2 top-1/2 h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full border-[8px] border-[#57577F]/[0.055] dark:border-[#CED7DF]/[0.05]"
-                  >
-                    <span className="absolute inset-3 rounded-full border-[5px] border-[#57577F]/[0.045] dark:border-[#CED7DF]/[0.04]" />
-                  </span>
+                  <GroovaraRingMark className="absolute left-1/2 top-1/2 h-36 w-36 -translate-x-1/2 -translate-y-1/2 bg-[#57577F]/[0.055] dark:bg-[#CED7DF]/[0.05]" />
                 ) : null}
 
                 <span className="relative block text-xl font-medium tracking-[0.08em] sm:text-2xl">
@@ -746,12 +790,7 @@ export default function TracklistsPage() {
 
         {!loading && !err ? (
           <section className="relative mx-auto mt-16 max-w-3xl">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute -left-52 -top-28 hidden h-72 w-72 rounded-full border-[12px] border-[#57577F]/[0.04] lg:block dark:border-[#CED7DF]/[0.035]"
-            >
-              <span className="absolute inset-8 rounded-full border-[8px] border-[#57577F]/[0.035] dark:border-[#CED7DF]/[0.03]" />
-            </div>
+            <GroovaraRingMark className="absolute -left-52 -top-28 hidden h-72 w-72 bg-[#57577F]/[0.04] lg:block dark:bg-[#CED7DF]/[0.035]" />
 
             <div className="relative">
               <h1 className="text-3xl font-medium tracking-[0.08em] text-[#302b31] dark:text-[#f4eef7] sm:text-4xl">

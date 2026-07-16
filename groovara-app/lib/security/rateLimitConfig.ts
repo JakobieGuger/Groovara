@@ -14,5 +14,6 @@ export const RATE_LIMITS: Record<
   delete_tracklist: { maxAttempts: 20, windowSeconds: 60 * 60 },
   delete_mixlist: { maxAttempts: 20, windowSeconds: 60 * 60 },
   spotify_import: { maxAttempts: 10, windowSeconds: 60 * 60 },
-  submit_feedback: { maxAttempts: 2, windowSeconds: 60 * 5},
+  youtube_export: { maxAttempts: 55, windowSeconds: 60 * 60 },
+  submit_feedback: { maxAttempts: 2, windowSeconds: 60 * 5 },
 };

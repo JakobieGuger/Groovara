@@ -148,6 +148,19 @@ const trackSongSchema = z.object({
     z.string().max(200).nullable()
   ),
   url: z.string().trim().url("URL must be valid.").max(2048),
+  isrc: z.preprocess(
+    (value) => {
+      if (typeof value !== "string") return null;
+
+      const normalized = value
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "");
+
+      return normalized === "" ? null : normalized;
+    },
+    z.string().max(32).nullable(),
+  ),
 });
 
 const removeSongSchema = z.object({
@@ -294,6 +307,7 @@ export async function createMixlistFromTracklistAction(
       title: s.title,
       artist: s.artist,
       album: s.album,
+      isrc: s.isrc,
       version: null,
       url: s.url,
       note: s.note ? normalizeUserText(s.note) : null,
@@ -415,6 +429,7 @@ export async function addSongToTracklistAction(rawInput: unknown): Promise<OkRes
     title: input.title,
     artist: input.artist,
     album: input.album,
+    isrc: input.isrc,
     version: null,
     url: input.url,
     note: null,

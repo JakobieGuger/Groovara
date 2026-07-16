@@ -32,6 +32,7 @@ type MixSong = {
   title: string;
   artist: string;
   album: string | null;
+  isrc: string | null;
   url: string;
   note: string | null;
 };
@@ -200,6 +201,66 @@ function toUiTrack(song: MixSong, index: number): UiTrack {
   };
 }
 
+type YouTubeExportMode = "search_missing" | "matched_only";
+
+type YouTubeExportPreviewSong = {
+  position: number;
+  title: string;
+  artist: string;
+  status: "matched" | "search_required" | "unresolved";
+  matchSource:
+    | "direct_youtube"
+    | "source_url_cache"
+    | "isrc"
+    | "title_artist"
+    | null;
+};
+
+type YouTubeExportPreview = {
+  success: true;
+  mixlistId: string;
+  title: string;
+  songCount: number;
+  matchedCount: number;
+  searchRequiredCount: number;
+  uniqueSearchRequiredCount: number;
+  unresolvedCount: number;
+  estimatedSearchRequests: number;
+  estimatedGeneralQuotaUnits: number;
+  canSearchAndExport: boolean;
+  canExportMatchedOnly: boolean;
+  budget: {
+    used: number;
+    remaining: number;
+    dailyLimit: number;
+    quotaDay: string;
+    resetsAt: string;
+  };
+  songs: YouTubeExportPreviewSong[];
+};
+
+function formatYouTubeBudgetReset(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "midnight Pacific";
+
+  return date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function buildManualYouTubeSearchUrl(title: string, artist: string) {
+  const query = [artist, title].filter(Boolean).join(" ").trim();
+
+  return (
+    "https://www.youtube.com/results?search_query=" +
+    encodeURIComponent(query)
+  );
+}
+
+const SHOW_YOUTUBE_EXPORT_DEBUG =
+  process.env.NEXT_PUBLIC_SHOW_EXPORT_DEBUG === "true";
+
 export default function MixlistPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -211,6 +272,14 @@ export default function MixlistPage() {
   const [loading, setLoading] = useState(true);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [endExportMenuOpen, setEndExportMenuOpen] = useState(false);
+  const [exportingYouTube, setExportingYouTube] = useState(false);
+  const [youtubePreviewOpen, setYouTubePreviewOpen] = useState(false);
+  const [youtubePreviewLoading, setYouTubePreviewLoading] = useState(false);
+  const [youtubePreview, setYouTubePreview] =
+    useState<YouTubeExportPreview | null>(null);
+  const [youtubePreviewError, setYouTubePreviewError] =
+    useState<string | null>(null);
   const [copyingToStudio, setCopyingToStudio] = useState(false);
   const [studioStatus, setStudioStatus] = useState<string | null>(null);
   const [resetStatus, setResetStatus] = useState<string | null>(null);
@@ -226,6 +295,7 @@ export default function MixlistPage() {
   const saveTimerRef = useRef<number | null>(null);
   const receiptTrackedRef = useRef(false);
   const openedMixlistTrackedRef = useRef(false);
+  const youtubeExportResumeAttemptedRef = useRef(false);
   const [preferredPlatform, setPreferredPlatform] = useState<
     "spotify" | "youtube" | "apple"
   >("youtube");
@@ -334,6 +404,219 @@ export default function MixlistPage() {
       alert("Spotify export failed.");
     }
   };
+
+  const closeYouTubeExportPreview = () => {
+    if (exportingYouTube) return;
+    setYouTubePreviewOpen(false);
+    setYouTubePreviewLoading(false);
+    setYouTubePreview(null);
+    setYouTubePreviewError(null);
+  };
+
+  const openYouTubeExportPreview = async () => {
+    if (youtubePreviewLoading || exportingYouTube) return;
+
+    setExportMenuOpen(false);
+    setYouTubePreviewOpen(true);
+    setYouTubePreviewLoading(true);
+    setYouTubePreview(null);
+    setYouTubePreviewError(null);
+
+    try {
+      const response = await fetch("/api/youtube/export/preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ mixlistId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setYouTubePreviewError(
+          data?.error ?? "YouTube export preview failed.",
+        );
+        return;
+      }
+
+      const preview = data as YouTubeExportPreview;
+
+      trackEvent("opened_youtube_export_preview", {
+        mixlist_id: mixlistId,
+        song_count: Number(preview.songCount ?? songs.length),
+        matched_count: Number(preview.matchedCount ?? 0),
+        estimated_search_requests: Number(
+          preview.estimatedSearchRequests ?? 0,
+        ),
+      });
+
+      const everythingMatched =
+        preview.songCount > 0 &&
+        preview.matchedCount === preview.songCount &&
+        preview.searchRequiredCount === 0 &&
+        preview.unresolvedCount === 0;
+
+      if (everythingMatched) {
+        setYouTubePreviewOpen(false);
+        setYouTubePreviewLoading(false);
+        setYouTubePreview(null);
+        setCopyStatus("Preparing YouTube playlist...");
+
+        // Every song is already cached, so matched-only is the safest path:
+        // it guarantees this happy-path export cannot spend search requests.
+        await executeYouTubeExport("matched_only");
+        return;
+      }
+
+      setYouTubePreview(preview);
+    } catch (error) {
+      console.error("YouTube export preview failed", error);
+      setYouTubePreviewError("YouTube export preview failed.");
+    } finally {
+      setYouTubePreviewLoading(false);
+    }
+  };
+
+  const executeYouTubeExport = async (mode: YouTubeExportMode) => {
+    if (exportingYouTube) return;
+
+    setExportingYouTube(true);
+    setYouTubePreviewError(null);
+    setCopyStatus(
+      mode === "matched_only"
+        ? "Exporting matched songs to YouTube..."
+        : "Finding matches and preparing YouTube playlist...",
+    );
+
+    try {
+      const res = await fetch("/api/youtube/export", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mixlistId,
+          mode,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (
+        (res.status === 409 || res.status === 401) &&
+        (data?.connectUrl || data?.loginUrl)
+      ) {
+        window.location.href = data.connectUrl ?? data.loginUrl;
+        return;
+      }
+
+      if (!res.ok) {
+        const exportedCount = Number(data?.exportedCount ?? 0);
+
+        if (data?.playlistUrl && exportedCount > 0) {
+          window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
+        }
+
+        const codeSuffix = data?.code ? " (" + data.code + ")" : "";
+        setYouTubePreviewError(
+          (data?.error ?? "YouTube export failed.") + codeSuffix,
+        );
+        setCopyStatus(null);
+        return;
+      }
+
+      trackEvent("exported_playlist", {
+        mixlist_id: mixlistId,
+        platform: "youtube",
+        export_mode: mode,
+        song_count: songs.length,
+        exported_count: data?.exportedCount ?? 0,
+        skipped_count: data?.skippedCount ?? 0,
+        search_requests: data?.searchRequests ?? 0,
+      });
+
+      const exportedCount = Number(data?.exportedCount ?? 0);
+      const skippedCount = Number(data?.skippedCount ?? 0);
+      setCopyStatus(
+        skippedCount > 0
+          ? "Exported " + exportedCount + "; skipped " + skippedCount + "."
+          : "Exported " +
+            exportedCount +
+            " song" +
+            (exportedCount === 1 ? "" : "s") +
+            ".",
+      );
+      window.setTimeout(() => setCopyStatus(null), 3500);
+
+      setYouTubePreviewOpen(false);
+      setYouTubePreview(null);
+      setYouTubePreviewError(null);
+
+      if (data?.playlistUrl) {
+        window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (error) {
+      console.error("YouTube export failed", error);
+      setYouTubePreviewError("YouTube export failed.");
+      setCopyStatus(null);
+    } finally {
+      setExportingYouTube(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!youtubePreviewOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !exportingYouTube) {
+        closeYouTubeExportPreview();
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [youtubePreviewOpen, exportingYouTube]);
+
+  useEffect(() => {
+    if (loading || youtubeExportResumeAttemptedRef.current) return;
+
+    const query = new URLSearchParams(window.location.search);
+    if (
+      query.get("youtube") !== "connected" ||
+      query.get("resumeYouTubeExport") !== "1"
+    ) {
+      return;
+    }
+
+    youtubeExportResumeAttemptedRef.current = true;
+    const requestedMode = query.get("youtubeExportMode");
+    const resumeMode: YouTubeExportMode =
+      requestedMode === "matched_only"
+        ? "matched_only"
+        : "search_missing";
+
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("youtube");
+    cleanUrl.searchParams.delete("resumeYouTubeExport");
+    cleanUrl.searchParams.delete("youtubeExportMode");
+    window.history.replaceState(
+      null,
+      "",
+      cleanUrl.pathname + cleanUrl.search + cleanUrl.hash,
+    );
+
+    void executeYouTubeExport(resumeMode);
+    // The ref prevents React Strict Mode from resuming the export twice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, mixlistId]);
 
   useEffect(() => {
     receiptTrackedRef.current = false;
@@ -451,7 +734,7 @@ export default function MixlistPage() {
 
       const { data: songData, error: songErr } = await supabase
         .from("mixlist_songs")
-        .select("id,position,title,artist,album,url,note")
+        .select("id,position,title,artist,album,url,note,platform,track_id,isrc")
         .eq("mixlist_id", mixlistId)
         .order("position", { ascending: true });
 
@@ -711,6 +994,7 @@ export default function MixlistPage() {
             platform: sourcePlatform,
             track_id: activeSong.id,
             url: activeSong.url,
+            isrc: activeSong.isrc,
           },
           preferredPlatform,
         );
@@ -864,12 +1148,42 @@ export default function MixlistPage() {
     });
   };
 
-  const showFinishingNote = useMemo(() => {
-    if (!mix?.finishing_note) return false;
+  const handleListenAgain = () => {
+    if (songs.length === 0) return;
+
+    setSelectedIndex(0);
+    setHasInteracted(false);
+    setAutoplayToken((value) => value + 1);
+
+    if (mix?.reveal_mode) {
+      setRevealedSlots(1);
+      setClicked(new Array(songs.length).fill(false));
+    } else {
+      setClicked(new Array(songs.length).fill(false));
+    }
+
+    setResetStatus("Back at the beginning.");
+    window.setTimeout(() => setResetStatus(null), 1600);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    trackEvent("restarted_mixlist", {
+      mixlist_id: mixlistId,
+      song_count: songs.length,
+    });
+  };
+
+  const showEndPanel = useMemo(() => {
+    if (!mix || songs.length === 0) return false;
     if (!mix.reveal_mode) return true;
-    if (songs.length === 0) return false;
-    return revealedSlots === songs.length && clicked[songs.length - 1] === true;
-  }, [mix, revealedSlots, songs.length, clicked]);
+
+    return (
+      revealedSlots === songs.length &&
+      clicked[songs.length - 1] === true
+    );
+  }, [mix, songs.length, revealedSlots, clicked]);
+
+  const showFinishingNote =
+    showEndPanel && Boolean((mix?.finishing_note ?? "").trim());
 
   const noteRangeLabel = useMemo(() => {
     if (!activeSong) return "SONG NOTE";
@@ -927,9 +1241,8 @@ export default function MixlistPage() {
   ) : null;
 
   const messageCard = mix?.message ? (
-    <div className="gv_row rounded-2xl p-5">
-      <p className="text-xs tracking-widest text-muted-foreground">MESSAGE</p>
-      <p className="gv_accent mt-3 whitespace-pre-wrap text-sm">
+    <div className="mx-auto mt-5 max-w-5xl text-center xl:text-left">
+      <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
         {mix.message}
       </p>
     </div>
@@ -999,6 +1312,61 @@ export default function MixlistPage() {
     </div>
   );
 
+  const renderExportOptions = (
+    closeMenu: () => void,
+    placement: "up" | "down" = "down",
+  ) => (
+    <div
+      className={`absolute right-0 z-30 w-56 overflow-hidden rounded-2xl border border-border bg-background/95 p-2 shadow-xl backdrop-blur ${
+        placement === "up"
+          ? "bottom-full mb-2"
+          : "top-full mt-2"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          closeMenu();
+          void handleExportSpotify();
+        }}
+        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-foreground transition hover:bg-purple-500/10"
+      >
+        <span>Spotify</span>
+        <span className="text-xs text-purple-300">Export</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          closeMenu();
+          void openYouTubeExportPreview();
+        }}
+        disabled={exportingYouTube}
+        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-foreground transition hover:bg-purple-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span>YouTube</span>
+        <span className="text-xs text-purple-300">
+          {youtubePreviewLoading
+            ? "Checking..."
+            : exportingYouTube
+              ? "Exporting..."
+              : "Export"}
+        </span>
+      </button>
+
+      <button
+        type="button"
+        disabled
+        className="flex w-full cursor-not-allowed items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-muted-foreground opacity-70"
+      >
+        <span>Apple Music</span>
+        <span className="text-[10px] uppercase tracking-widest">
+          Coming soon
+        </span>
+      </button>
+    </div>
+  );
+
   const copyLinkCard = (
     <div className="gv_row rounded-2xl p-4">
       <div className="grid grid-cols-2 gap-3">
@@ -1015,40 +1383,9 @@ export default function MixlistPage() {
             EXPORT
           </button>
 
-          {exportMenuOpen ? (
-            <div className="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-2xl border border-border bg-background/95 p-2 shadow-xl backdrop-blur">
-              <button
-                type="button"
-                onClick={handleExportSpotify}
-                className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-foreground transition hover:bg-purple-500/10"
-              >
-                <span>Spotify</span>
-                <span className="text-xs text-purple-300">Export</span>
-              </button>
-
-              <button
-                type="button"
-                disabled
-                className="flex w-full cursor-not-allowed items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-muted-foreground opacity-70"
-              >
-                <span>Apple Music</span>
-                <span className="text-[10px] uppercase tracking-widest">
-                  Coming soon
-                </span>
-              </button>
-
-              <button
-                type="button"
-                disabled
-                className="flex w-full cursor-not-allowed items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-muted-foreground opacity-70"
-              >
-                <span>YouTube</span>
-                <span className="text-[10px] uppercase tracking-widest">
-                  Coming soon
-                </span>
-              </button>
-            </div>
-          ) : null}
+          {exportMenuOpen
+            ? renderExportOptions(() => setExportMenuOpen(false))
+            : null}
         </div>
       </div>
 
@@ -1091,7 +1428,7 @@ export default function MixlistPage() {
           onClick={handleResetRevelations}
           className={purpleActionButton}
         >
-          RESET REVELATIONS
+          RESET
         </button>
 
         {resetStatus ? (
@@ -1101,6 +1438,56 @@ export default function MixlistPage() {
         ) : null}
       </div>
     ) : null;
+
+  const endOfMixPanel = showEndPanel ? (
+    <section className="mx-auto mt-8 max-w-3xl">
+      <div className="gv_row rounded-3xl border border-purple-500/20 p-6 text-center sm:p-8">
+        <p className="gv_accent whitespace-pre-wrap text-xl leading-8 sm:text-2xl">
+          {showFinishingNote
+            ? mix.finishing_note
+            : "That’s everything they wanted you to hear."}
+        </p>
+
+        <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+          What would you like to do now?
+        </p>
+
+        <div className="mx-auto mt-6 max-w-md space-y-3">
+          <Link
+            href="/tracklists/new"
+            className={`${purpleActionButton} block text-center`}
+          >
+            MAKE A NEW MIXLIST
+          </Link>
+
+          <button
+            type="button"
+            onClick={handleListenAgain}
+            className={purpleActionButton}
+          >
+            LISTEN TO IT AGAIN
+          </button>
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setEndExportMenuOpen((open) => !open)}
+              className={purpleActionButton}
+            >
+              EXPORT MIXLIST
+            </button>
+
+            {endExportMenuOpen
+              ? renderExportOptions(
+                  () => setEndExportMenuOpen(false),
+                  "up",
+                )
+              : null}
+          </div>
+        </div>
+      </div>
+    </section>
+  ) : null;
 
   if (loading) {
     return (
@@ -1165,19 +1552,18 @@ export default function MixlistPage() {
         />
       </div>
 
-      <div className="relative z-10">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex-1 text-center xl:text-left">
-            <p className="text-xs tracking-[0.25em] text-muted-foreground">
-              MIXLIST
-            </p>
-            <h1 className="gv_accent mt-2 text-3xl font-semibold tracking-wide">
-              {mix.title || "Untitled Mixlist"}
-            </h1>
-          </div>
-        </div>
+      <div className="relative z-10 mx-auto max-w-7xl">
+        <header className="text-center xl:text-left">
+          <p className="text-xs tracking-[0.25em] text-muted-foreground">
+            MIXLIST
+          </p>
+          <h1 className="gv_accent mt-2 text-3xl font-semibold tracking-wide sm:text-4xl">
+            {mix.title || "Untitled Mixlist"}
+          </h1>
+          {messageCard}
+        </header>
 
-        {songs.length === 0 && (
+        {songs.length === 0 ? (
           <div className="mt-6 max-w-3xl">
             <InlineNotice
               kind="info"
@@ -1185,10 +1571,30 @@ export default function MixlistPage() {
               message="The creator didn't include any songs."
             />
           </div>
-        )}
+        ) : null}
 
-        <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-          <div className="space-y-4">
+        {activeSong ? (
+          <section className="gv_row mt-8 rounded-3xl border border-border px-5 py-5 sm:px-7">
+            <p className="text-xs tracking-[0.2em] text-muted-foreground">
+              SONG #{safeSelectedIndex + 1}
+            </p>
+            <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+              <h2 className="gv_accent text-2xl font-semibold leading-tight sm:text-3xl">
+                {activeIsHidden
+                  ? `Song ${safeSelectedIndex + 1}`
+                  : activeSong.title}
+              </h2>
+              {!activeIsHidden ? (
+                <p className="text-sm italic text-muted-foreground sm:text-base">
+                  {activeSong.artist}
+                </p>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] xl:items-start">
+          <div>
             {displayUiTrack ? (
               <TrackTransition
                 transitionKey={`${safeSelectedIndex}:${
@@ -1231,11 +1637,16 @@ export default function MixlistPage() {
                   onNext={() => {
                     setHasInteracted(true);
                     setSelectedIndex(
-                      Math.min(visibleSongs.length - 1, safeSelectedIndex + 1),
+                      Math.min(
+                        visibleSongs.length - 1,
+                        safeSelectedIndex + 1,
+                      ),
                     );
                   }}
                   disabledPrev={safeSelectedIndex === 0}
-                  disabledNext={safeSelectedIndex >= visibleSongs.length - 1}
+                  disabledNext={
+                    safeSelectedIndex >= visibleSongs.length - 1
+                  }
                 />
               </TrackTransition>
             ) : (
@@ -1243,113 +1654,340 @@ export default function MixlistPage() {
                 Select a song to begin.
               </div>
             )}
+          </div>
 
-            <div className="space-y-4 xl:hidden">
-              {messageCard}
-              {platformSelectorCard}
-              {editInStudioCard}
-              {copyLinkCard}
-              {songNoteCard}
-              {revealOrBackButton}
-              {resetRevelationsButton}
-            </div>
+          <aside className="space-y-4 xl:sticky xl:top-8">
+            {platformSelectorCard}
+            {copyLinkCard}
+            {songNoteCard}
+            {revealOrBackButton}
+            {resetRevelationsButton}
+            {editInStudioCard}
+          </aside>
+        </div>
 
-            <div className="gv_row space-y-2 rounded-3xl p-3">
-              {visibleSongs.map((s, idx) => {
-                const isHidden = mix.reveal_mode && clicked[idx] !== true;
+        <section className="gv_row mt-8 space-y-2 rounded-3xl p-3">
+          {visibleSongs.map((song, index) => {
+            const isHidden =
+              mix.reveal_mode && clicked[index] !== true;
 
-                if (isHidden) {
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => {
-                        setHasInteracted(true);
-                        setSelectedIndex(idx);
-                        revealSongAt(idx, "song_list");
-                      }}
-                      className="gv_row block w-full rounded-2xl px-4 py-4 text-left transition"
-                    >
-                      <p className="gv_accent text-sm">Song {idx + 1}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Click to reveal
-                      </p>
-                    </button>
-                  );
-                }
+            if (isHidden) {
+              return (
+                <button
+                  key={song.id}
+                  type="button"
+                  onClick={() => {
+                    setHasInteracted(true);
+                    setSelectedIndex(index);
+                    revealSongAt(index, "song_list");
+                  }}
+                  className="gv_row block w-full rounded-2xl px-4 py-4 text-left transition"
+                >
+                  <p className="gv_accent text-sm">
+                    Song {index + 1}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Click to reveal
+                  </p>
+                </button>
+              );
+            }
 
-                return (
-                  <div
-                    key={s.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => {
-                      setHasInteracted(true);
-                      setSelectedIndex(idx);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setHasInteracted(true);
-                        setSelectedIndex(idx);
-                      }
-                    }}
-                    className={`gv_row rounded-2xl border px-4 py-3 transition ${
-                      idx === safeSelectedIndex
-                        ? "ring-1 ring-[color:var(--ring)]"
-                        : ""
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="gv_accent text-sm">
-                          {idx + 1}. {s.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {s.artist}
-                          {s.album ? ` - ${s.album}` : ""}
-                        </p>
-                      </div>
-
-                      <a
-                        href={s.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="gv_row gv_accent rounded-lg px-2 py-1 text-[10px] tracking-[0.2em] transition"
-                      >
-                        OPEN
-                      </a>
-                    </div>
+            return (
+              <div
+                key={song.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  setHasInteracted(true);
+                  setSelectedIndex(index);
+                }}
+                onKeyDown={(event) => {
+                  if (
+                    event.key === "Enter" ||
+                    event.key === " "
+                  ) {
+                    event.preventDefault();
+                    setHasInteracted(true);
+                    setSelectedIndex(index);
+                  }
+                }}
+                className={`gv_row rounded-2xl border px-4 py-3 transition ${
+                  index === safeSelectedIndex
+                    ? "ring-1 ring-[color:var(--ring)]"
+                    : ""
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="gv_accent truncate text-sm">
+                      {index + 1}. {song.title}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {song.artist}
+                      {song.album ? ` - ${song.album}` : ""}
+                    </p>
                   </div>
-                );
-              })}
+
+                  <a
+                    href={song.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(event) => event.stopPropagation()}
+                    className="gv_row gv_accent flex-shrink-0 rounded-lg px-2 py-1 text-[10px] tracking-[0.2em] transition"
+                  >
+                    OPEN
+                  </a>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+
+        {endOfMixPanel}
+      </div>
+
+      {youtubePreviewOpen ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeYouTubeExportPreview();
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="youtube-export-preview-title"
+            className="gv_row max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-purple-500/30 bg-background p-5 shadow-2xl sm:p-6"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs tracking-[0.24em] text-purple-300">
+                  YOUTUBE EXPORT
+                </p>
+                <h2
+                  id="youtube-export-preview-title"
+                  className="gv_accent mt-2 text-2xl font-semibold"
+                >
+                  {youtubePreview && youtubePreview.matchedCount === 0
+                    ? "These songs need your help"
+                    : "A few songs need your help"}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeYouTubeExportPreview}
+                disabled={exportingYouTube}
+                className="rounded-full border border-border px-3 py-1 text-sm text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+                aria-label="Close YouTube export preview"
+              >
+                CLOSE
+              </button>
             </div>
 
-            {showFinishingNote ? (
-              <div className="gv_row rounded-2xl p-5">
-                <p className="text-xs tracking-widest text-muted-foreground">
-                  FINISHING NOTE
-                </p>
-                <p className="gv_accent mt-3 whitespace-pre-wrap text-sm">
-                  {mix.finishing_note}
+            {youtubePreviewLoading ? (
+              <div className="py-12 text-center">
+                <p className="text-sm text-muted-foreground">
+                  Checking which songs are ready...
                 </p>
               </div>
+            ) : youtubePreviewError && !youtubePreview ? (
+              <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
+                <p className="text-sm text-red-200">{youtubePreviewError}</p>
+                <div className="mt-4 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={openYouTubeExportPreview}
+                    className={purpleActionButton}
+                  >
+                    TRY AGAIN
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeYouTubeExportPreview}
+                    className={purpleActionButton}
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              </div>
+            ) : youtubePreview ? (
+              <div className="mt-6 space-y-5">
+                <div className="rounded-2xl border border-border bg-black/10 p-4 dark:bg-white/5">
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Groovara found YouTube versions for{" "}
+                    <span className="gv_accent font-semibold">
+                      {youtubePreview.matchedCount} of {youtubePreview.songCount}
+                    </span>{" "}
+                    songs.
+                  </p>
+
+                  {youtubePreview.searchRequiredCount > 0 &&
+                  youtubePreview.canSearchAndExport ? (
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      Groovara can try to find the remaining{" "}
+                      {youtubePreview.searchRequiredCount}{" "}
+                      song{youtubePreview.searchRequiredCount === 1 ? "" : "s"}{" "}
+                      automatically. Anything it still cannot match can be
+                      searched for manually below.
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      You can export the songs already found. Afterward, use the
+                      links below to search YouTube and add the remaining songs
+                      to the playlist yourself.
+                    </p>
+                  )}
+                </div>
+
+                {youtubePreviewError ? (
+                  <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+                    {youtubePreviewError}
+                  </div>
+                ) : null}
+
+                {youtubePreview.songs.some(
+                  (song) => song.status !== "matched",
+                ) ? (
+                  <div className="space-y-2">
+                    <p className="text-xs tracking-[0.2em] text-muted-foreground">
+                      SONGS STILL NEEDED
+                    </p>
+
+                    <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                      {youtubePreview.songs
+                        .filter((song) => song.status !== "matched")
+                        .map((song) => (
+                          <div
+                            key={song.position + ":" + song.title + ":" + song.artist}
+                            className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-black/10 px-3 py-3 dark:bg-white/5"
+                          >
+                            <div className="min-w-0">
+                              <p className="gv_accent truncate text-sm">
+                                {song.position}. {song.title}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {song.artist}
+                              </p>
+                            </div>
+
+                            <a
+                              href={buildManualYouTubeSearchUrl(
+                                song.title,
+                                song.artist,
+                              )}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-shrink-0 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-2 text-[10px] tracking-widest text-gv_accent transition hover:bg-purple-500/20"
+                            >
+                              SEARCH YOUTUBE
+                            </a>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {SHOW_YOUTUBE_EXPORT_DEBUG ? (
+                  <details className="rounded-2xl border border-border p-4">
+                    <summary className="cursor-pointer text-sm font-medium text-foreground">
+                      Internal export details
+                    </summary>
+
+                    <div className="mt-4 space-y-3 text-xs text-muted-foreground">
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-xl bg-black/10 p-2 dark:bg-white/5">
+                          <p className="gv_accent text-lg font-semibold">
+                            {youtubePreview.matchedCount}
+                          </p>
+                          <p>Matched</p>
+                        </div>
+                        <div className="rounded-xl bg-black/10 p-2 dark:bg-white/5">
+                          <p className="gv_accent text-lg font-semibold">
+                            {youtubePreview.searchRequiredCount}
+                          </p>
+                          <p>Need search</p>
+                        </div>
+                        <div className="rounded-xl bg-black/10 p-2 dark:bg-white/5">
+                          <p className="gv_accent text-lg font-semibold">
+                            {youtubePreview.unresolvedCount}
+                          </p>
+                          <p>Unresolved</p>
+                        </div>
+                      </div>
+
+                      <p>
+                        Automatic budget: {youtubePreview.budget.used} /{" "}
+                        {youtubePreview.budget.dailyLimit} used;{" "}
+                        {youtubePreview.budget.remaining} remaining.
+                      </p>
+                      <p>
+                        Estimated searches: {youtubePreview.estimatedSearchRequests}.
+                      </p>
+                      <p>
+                        Budget resets{" "}
+                        {formatYouTubeBudgetReset(
+                          youtubePreview.budget.resetsAt,
+                        )}.
+                      </p>
+                    </div>
+                  </details>
+                ) : null}
+
+                <div className="space-y-3 pt-1">
+                  {youtubePreview.searchRequiredCount > 0 &&
+                  youtubePreview.canSearchAndExport ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void executeYouTubeExport("search_missing")
+                      }
+                      disabled={exportingYouTube}
+                      className={purpleActionButton}
+                    >
+                      {exportingYouTube
+                        ? "EXPORTING..."
+                        : "FIND MISSING SONGS AND EXPORT"}
+                    </button>
+                  ) : null}
+
+                  {youtubePreview.canExportMatchedOnly ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void executeYouTubeExport("matched_only")
+                      }
+                      disabled={exportingYouTube}
+                      className={purpleActionButton}
+                    >
+                      {exportingYouTube
+                        ? "EXPORTING..."
+                        : "EXPORT " +
+                          youtubePreview.matchedCount +
+                          " FOUND SONG" +
+                          (youtubePreview.matchedCount === 1 ? "" : "S")}
+                    </button>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={closeYouTubeExportPreview}
+                    disabled={exportingYouTube}
+                    className="w-full px-4 py-2 text-xs tracking-widest text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              </div>
             ) : null}
-          </div>
-          <div className="hidden xl:block">
-            <div className="sticky top-8 space-y-4">
-              {messageCard}
-              {platformSelectorCard}
-              {editInStudioCard}
-              {copyLinkCard}
-              {songNoteCard}
-              {revealOrBackButton}
-              {resetRevelationsButton}
-            </div>
-          </div>
+          </section>
         </div>
-      </div>
+      ) : null}
     </main>
   );
 }

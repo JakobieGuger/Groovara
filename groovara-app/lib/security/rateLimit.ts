@@ -13,6 +13,7 @@ export type RateLimitAction =
   | "delete_tracklist"
   | "delete_mixlist"
   | "spotify_import"
+  | "youtube_export"
   | "submit_feedback";
 
 export type RateLimitConfig = {
@@ -63,6 +64,8 @@ function formatRetryMessage(action: RateLimitAction): string {
       return "Too many mixlist deletions. Please wait and try again.";
     case "spotify_import":
       return "Too many Spotify imports. Please wait and try again.";
+    case "youtube_export":
+      return "Too many YouTube exports. Please wait before exporting again.";
     case "submit_feedback":
       return "You're submitting feedback too quickly. Please wait a moment and try again.";
     default:
