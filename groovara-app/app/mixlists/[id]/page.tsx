@@ -1439,13 +1439,16 @@ export default function MixlistPage() {
       </div>
     ) : null;
 
+  const endingMessage =
+    showFinishingNote && mix?.finishing_note
+      ? mix.finishing_note
+      : "That’s everything they wanted you to hear.";
+
   const endOfMixPanel = showEndPanel ? (
     <section className="mx-auto mt-8 max-w-3xl">
       <div className="gv_row rounded-3xl border border-purple-500/20 p-6 text-center sm:p-8">
         <p className="gv_accent whitespace-pre-wrap text-xl leading-8 sm:text-2xl">
-          {showFinishingNote
-            ? mix.finishing_note
-            : "That’s everything they wanted you to hear."}
+          {endingMessage}
         </p>
 
         <p className="mt-2 text-sm text-muted-foreground sm:text-base">
