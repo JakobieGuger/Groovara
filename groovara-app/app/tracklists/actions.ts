@@ -192,7 +192,7 @@ export async function deleteTracklistAction(
     };
   }
 
-  revalidatePath("/tracklists");
+  revalidatePath("/hub");
   revalidatePath(`/tracklists/${tracklistId}`);
 
   return { ok: true };
@@ -296,7 +296,7 @@ export async function importPlatformTracklistAction(
     };
   }
 
-  revalidatePath("/tracklists");
+  revalidatePath("/hub");
   revalidatePath(`/tracklists/${tracklist.id}`);
 
   return { ok: true, tracklistId: tracklist.id };

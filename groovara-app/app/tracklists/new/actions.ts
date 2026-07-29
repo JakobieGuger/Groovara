@@ -115,7 +115,7 @@ export async function createTracklistAction(
     },
   });
 
-  revalidatePath("/tracklists");
+  revalidatePath("/hub");
 
   return { ok: true, tracklistId: data.id };
 }

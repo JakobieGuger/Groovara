@@ -26,22 +26,21 @@ export default function AppNav() {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
-    if (href === "/hub") return pathname === "/hub" || pathname === "/";
-    return pathname === href || pathname.startsWith(`${href}/`);
+    if (href === "/hub") {
+      return (
+        pathname === "/hub" ||
+        pathname === "/tracklists/new" ||
+        pathname.startsWith("/tracklists/")
+      );
+    }
   };
 
   const items: MenuItem[] = [
     {
       type: "link",
-      label: "Home",
-      description: "Return to the main room",
-      href: "/hub",
-    },
-    {
-      type: "link",
       label: "Studio",
       description: "Shape songs, notes, and pacing",
-      href: "/tracklists",
+      href: "/hub",
     },
     { type: "divider" },
     {

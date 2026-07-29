@@ -1,4 +1,28 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Early Access | Groovara",
+  description:
+    "Welcome to Groovara early access—a place for people who live inside music.",
+};
+
+function DecorativeRings({
+  className,
+}: {
+  className: string;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`pointer-events-none absolute rounded-full ${className}`}
+    >
+      <span className="absolute inset-0 rounded-full border-[3px] border-[#57577F]/[0.055] dark:border-[#CED7DF]/[0.045]" />
+      <span className="absolute inset-[1.15rem] rounded-full border-[3px] border-[#57577F]/[0.055] dark:border-[#CED7DF]/[0.045]" />
+      <span className="absolute inset-[2.3rem] rounded-full border-[3px] border-[#57577F]/[0.055] dark:border-[#CED7DF]/[0.045]" />
+    </div>
+  );
+}
 
 export default async function BetaPage({
   searchParams,
@@ -17,73 +41,71 @@ export default async function BetaPage({
     : "/login";
 
   return (
-    <main className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
-      <div className="w-full max-w-2xl rounded-3xl border border-border bg-card/80 px-8 py-12 shadow-xl backdrop-blur md:px-12 md:py-16">
-        <div className="mx-auto max-w-xl text-center">
-          <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
+    <main className="gv-paper-bg relative min-h-screen overflow-hidden text-foreground">
+      <DecorativeRings className="-left-24 -top-20 h-72 w-72 sm:-left-16 sm:-top-14 sm:h-80 sm:w-80" />
+      <DecorativeRings className="-bottom-20 -right-20 h-60 w-60 sm:-bottom-24 sm:-right-20 sm:h-72 sm:w-72" />
+
+      <div className="gv-paper-content relative z-10 mx-auto flex min-h-screen w-full max-w-5xl items-center justify-center px-6 py-16 sm:px-10 sm:py-20">
+        <section className="w-full max-w-3xl text-center">
+          <p className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
             Early Access
           </p>
 
-          <h1 className="mt-6 text-4xl font-semibold tracking-tight md:text-5xl">
-            Welcome to Groovara Beta
+          <h1 className="gv-accent mt-5 text-3xl font-semibold tracking-wide sm:text-4xl">
+            Welcome to Groovara
           </h1>
 
-          <p className="mt-3 text-xl font-light text-foreground/90 md:text-2xl">
-            You&apos;re early. We appreciate that.
+          <p className="mx-auto mt-6 max-w-2xl text-xl font-medium leading-snug text-foreground sm:text-2xl">
+            This is a place for people who don&apos;t just listen to music.
+            <br className="hidden sm:block" /> They live inside it.
           </p>
 
-          <div className="mt-8 space-y-4 text-base leading-7 text-foreground/85">
-            <p>This is the early build of Groovara.</p>
-            <p>It&apos;s not polished. It&apos;s not finished. But it&apos;s alive.</p>
+          <div className="mx-auto mt-7 max-w-2xl space-y-6 text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
             <p>
-              Groovara is built for people who believe music is more than
-              background noise. It&apos;s memory, intention, and connection.
-              This beta is your chance to explore, create, and help shape what
-              this becomes.
+              We&apos;re building something for that. It&apos;s not polished.
+              It&apos;s not finished. But it&apos;s alive.
             </p>
+
+            <p>
+              If you&apos;re curious, you&apos;re already the right kind of
+              person.
+            </p>
+
+            <p>If you have a code, you already know what to do.</p>
           </div>
 
-          <div className="my-8 h-px w-full bg-border" />
-
-          {code ? (
-            <div className="mx-auto mt-6 max-w-sm rounded-2xl border border-purple-500/30 bg-purple-500/10 px-4 py-4">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-purple-300">
-                Invite Code Detected
-              </p>
-              <p className="mt-2 text-sm font-medium tracking-wide text-foreground">
-                {code}
-              </p>
-            </div>
-          ) : null}
-
-          <div className="space-y-1 text-sm text-muted-foreground">
-            <p>                   </p>
-            <p>Already have access? Log in.</p>
-            <p>Signing up will require a code.</p>
-          </div>
-
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               href={loginHref}
-              className="inline-flex min-w-[180px] items-center justify-center rounded-full border border-purple-500/50 bg-purple-500/15 px-6 py-3 text-sm font-medium tracking-wide text-purple-300 transition hover:bg-purple-500/25"
+              className="inline-flex min-w-32 items-center justify-center rounded-full border border-[#57577F] bg-transparent px-7 py-3 text-sm font-medium text-[#3d3150] transition hover:-translate-y-0.5 hover:bg-[#57577F]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#57577F]/35 dark:border-purple-300/60 dark:text-purple-200 dark:hover:bg-purple-300/10 dark:focus-visible:ring-purple-300/35"
             >
-              Log In
+              Log in
             </Link>
 
             <Link
               href={enterBetaHref}
-              className="inline-flex min-w-[180px] items-center justify-center rounded-full border border-border bg-background/60 px-6 py-3 text-sm font-medium tracking-wide text-foreground transition hover:bg-background"
+              className="inline-flex min-w-32 items-center justify-center rounded-full border border-[#3f2458] bg-[#3f2458] px-7 py-3 text-sm font-medium text-white shadow-[0_10px_24px_rgba(63,36,88,0.16)] transition hover:-translate-y-0.5 hover:bg-[#4b2b68] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#57577F]/40 dark:border-purple-300/70 dark:bg-purple-300 dark:text-[#1b1022] dark:hover:bg-purple-200 dark:focus-visible:ring-purple-300/40"
             >
-              Sign Up
+              Enter code
             </Link>
           </div>
 
-          <p className="mt-10 text-xs text-muted-foreground">
-            You didn&apos;t just find this.
-            <br />
-            You belong here.
+          <p className="mt-5 text-base text-muted-foreground sm:text-lg">
+            And if you don&apos;t, you will soon.
           </p>
-        </div>
+
+          <div className="mx-auto mt-9 max-w-xl border-t border-border pt-6">
+            <p className="text-sm text-muted-foreground sm:text-base">
+              Got questions? So do we.{" "}
+              <a
+                href="mailto:hello@groovara.com"
+                className="transition hover:text-[#57577F] dark:hover:text-purple-200"
+              >
+                hello@groovara.com
+              </a>
+            </p>
+          </div>
+        </section>
       </div>
     </main>
   );

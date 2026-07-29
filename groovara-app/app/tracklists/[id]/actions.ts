@@ -360,7 +360,7 @@ export async function updateTracklistMetadataAction(rawInput: unknown): Promise<
     return { ok: false, type: "db", message: error.message ?? "Failed to save tracklist." };
   }
 
-  revalidatePath("/tracklists");
+  revalidatePath("/hub");
   revalidatePath(`/tracklists/${tracklistId}`);
 
   return { ok: true };

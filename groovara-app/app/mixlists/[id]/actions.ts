@@ -156,7 +156,7 @@ export async function copyMixlistToStudioAction(
     }
   }
 
-  revalidatePath("/tracklists");
+  revalidatePath("/hub");
   revalidatePath(`/tracklists/${tracklist.id}`);
 
   return {

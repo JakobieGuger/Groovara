@@ -1050,6 +1050,12 @@ export default function MixlistPage() {
     return clicked[safeSelectedIndex] !== true;
   }, [mix, clicked, safeSelectedIndex]);
 
+  const showFirstSongIntro = Boolean(
+    mix?.reveal_mode &&
+      songs.length > 0 &&
+      !clicked.some((value) => value === true),
+  );
+
   useEffect(() => {
     if (!hasInteracted) return;
     if (!activeSong) return;
@@ -1106,6 +1112,21 @@ export default function MixlistPage() {
     setRevealedSlots(nextSlots);
     setSelectedIndex(nextIndex);
     revealSongAt(nextIndex, "reveal_next");
+  };
+
+  const handlePrimaryReveal = () => {
+    if (songs.length === 0) return;
+
+    setHasInteracted(true);
+
+    if (clicked[0] !== true) {
+      setRevealedSlots((current) => Math.max(1, current));
+      setSelectedIndex(0);
+      revealSongAt(0, "reveal_first");
+      return;
+    }
+
+    handleRevealNext();
   };
 
   const handleResetRevelations = async () => {
@@ -1240,7 +1261,7 @@ export default function MixlistPage() {
     </div>
   ) : null;
 
-  const messageCard = mix?.message ? (
+  const descriptionBlock = mix?.message ? (
     <div className="mx-auto mt-5 max-w-5xl text-center xl:text-left">
       <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
         {mix.message}
@@ -1400,14 +1421,13 @@ export default function MixlistPage() {
   const revealOrBackButton =
     mix?.reveal_mode &&
     songs.length > 0 &&
-    (revealedSlots === 0 ||
-      (revealedSlots < songs.length && clicked[0] === true)) ? (
+    (clicked[0] !== true || revealedSlots < songs.length) ? (
       <button
-        onClick={handleRevealNext}
-        disabled={!canRevealNext}
+        onClick={handlePrimaryReveal}
+        disabled={clicked[0] === true && !canRevealNext}
         className={purpleActionButton}
       >
-        {revealedSlots === 0 ? "REVEAL FIRST" : "REVEAL NEXT"}
+        {clicked[0] !== true ? "REVEAL FIRST" : "REVEAL NEXT"}
       </button>
     ) : (
       <Link
@@ -1563,7 +1583,7 @@ export default function MixlistPage() {
           <h1 className="gv_accent mt-2 text-3xl font-semibold tracking-wide sm:text-4xl">
             {mix.title || "Untitled Mixlist"}
           </h1>
-          {messageCard}
+          {descriptionBlock}
         </header>
 
         {songs.length === 0 ? (
@@ -1576,7 +1596,7 @@ export default function MixlistPage() {
           </div>
         ) : null}
 
-        {activeSong ? (
+        {activeSong && !showFirstSongIntro ? (
           <section className="gv_row mt-8 rounded-3xl border border-border px-5 py-5 sm:px-7">
             <p className="text-xs tracking-[0.2em] text-muted-foreground">
               SONG #{safeSelectedIndex + 1}
@@ -1598,7 +1618,27 @@ export default function MixlistPage() {
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] xl:items-start">
           <div>
-            {displayUiTrack ? (
+            {showFirstSongIntro ? (
+              <section className="gv_row flex min-h-[28rem] flex-col items-center justify-center rounded-3xl border border-border px-6 py-12 text-center sm:px-10">
+                <p className="text-xs tracking-[0.24em] text-muted-foreground">
+                  READY WHEN YOU ARE
+                </p>
+                <h2 className="gv_accent mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
+                  Your first song is waiting.
+                </h2>
+                <p className="mt-4 max-w-lg text-sm leading-7 text-muted-foreground sm:text-base">
+                  The first title and
+                  artist will stay hidden until you begin.
+                </p>
+                <button
+                  type="button"
+                  onClick={handlePrimaryReveal}
+                  className="mt-7 w-full max-w-sm rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv_accent transition hover:bg-purple-500/20"
+                >
+                  REVEAL FIRST SONG
+                </button>
+              </section>
+            ) : displayUiTrack ? (
               <TrackTransition
                 transitionKey={`${safeSelectedIndex}:${
                   displayUiTrack?.platform ?? "none"
@@ -1614,14 +1654,6 @@ export default function MixlistPage() {
                   showNotes={false}
                   notes={activeSong?.note}
                   autoplay={hasInteracted}
-                  onPlay={() => {
-                    setHasInteracted(true);
-                    setSelectedIndex(safeSelectedIndex);
-
-                    if (mix.reveal_mode) {
-                      revealSongAt(safeSelectedIndex, "player_play");
-                    }
-                  }}
                   onReveal={() => {
                     setHasInteracted(true);
                     setSelectedIndex(safeSelectedIndex);
@@ -1639,17 +1671,27 @@ export default function MixlistPage() {
                   }}
                   onNext={() => {
                     setHasInteracted(true);
-                    setSelectedIndex(
-                      Math.min(
-                        visibleSongs.length - 1,
-                        safeSelectedIndex + 1,
-                      ),
+
+                    const nextIndex = Math.min(
+                      songs.length - 1,
+                      safeSelectedIndex + 1,
                     );
+
+                    if (nextIndex === safeSelectedIndex) return;
+
+                    if (mix.reveal_mode) {
+                      setRevealedSlots((current) =>
+                        Math.max(current, nextIndex + 1),
+                      );
+                      revealSongAt(nextIndex, "player_reveal_next");
+                    }
+
+                    setSelectedIndex(nextIndex);
                   }}
+                  prevLabel="PREVIOUS SONG"
+                  nextLabel={mix.reveal_mode ? "REVEAL NEXT" : "NEXT SONG"}
                   disabledPrev={safeSelectedIndex === 0}
-                  disabledNext={
-                    safeSelectedIndex >= visibleSongs.length - 1
-                  }
+                  disabledNext={safeSelectedIndex >= songs.length - 1}
                 />
               </TrackTransition>
             ) : (

@@ -220,7 +220,6 @@ export default function TracklistDetailPage() {
   const [mAlbum, setMAlbum] = useState("");
   const [addingManual, setAddingManual] = useState(false);
 
-  const [mixMsg, setMixMsg] = useState("");
   const [mixReveal, setMixReveal] = useState(true);
   const [creatingMix, setCreatingMix] = useState(false);
   const [mixFinish, setMixFinish] = useState("");
@@ -248,7 +247,6 @@ export default function TracklistDetailPage() {
   const selectedCount = selectedIds.size;
 
   const SONG_NOTE_LIMIT = 2000;
-  const MIXLIST_MESSAGE_LIMIT = 1000;
   const FINISHING_NOTE_LIMIT = 2000;
 
   const busy =
@@ -737,7 +735,9 @@ export default function TracklistDetailPage() {
     const result = await createMixlistFromTracklistAction({
       source_tracklist_id: String(id),
       title: mixTitle,
-      message: mixMsg,
+      // Keep using the existing Mixlist `message` column internally,
+      // but its user-facing source is now the Tracklist description.
+      message: description,
       finishing_note: mixFinish,
       reveal_mode: mixReveal,
       is_public: mixIsPublic,
@@ -1153,16 +1153,7 @@ export default function TracklistDetailPage() {
             <p className="text-xs tracking-widest text-gray-400">
               CREATE MIXLIST
             </p>
-            <textarea
-              value={mixMsg}
-              onChange={(e) => setMixMsg(e.target.value)}
-              maxLength={MIXLIST_MESSAGE_LIMIT}
-              className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
-              rows={4}
-              placeholder="Optional message/context for the person receiving this…"
-            />
 
-            <CharacterCounter value={mixMsg} max={MIXLIST_MESSAGE_LIMIT} />
 
             <textarea
               value={mixFinish}
