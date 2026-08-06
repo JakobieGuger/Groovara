@@ -288,9 +288,8 @@ export function BetaRequestForm({
           <p className="access-eyebrow">Request received</p>
           <h1>Your note is in the listening room.</h1>
           <p>
-            Thanks for taking the time to tell us how music fits into your
-            life. We’ll review your request and contact you at the email you
-            provided if a beta place opens up.
+            Thank you for taking the time to tell us how music fits into your
+            life. We’ll review your request and in the meantime, don’t keep great songs to yourself.
           </p>
 
           <div className="access-success-actions">
