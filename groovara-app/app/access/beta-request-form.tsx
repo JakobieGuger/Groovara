@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import type { FormEvent } from "react";
+import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { useEffect, useState } from "react";
 import ThemeToggle from "@/lib/ThemeToggle";
 import { trackEvent } from "@/lib/analytics";
@@ -71,6 +71,12 @@ export function BetaRequestForm({
   turnstileSiteKey,
 }: BetaRequestFormProps) {
   const [activeSection, setActiveSection] = useState("about");
+  const [selectedListeningStyles, setSelectedListeningStyles] = useState<
+    string[]
+  >([]);
+  const [selectedSharingReasons, setSelectedSharingReasons] = useState<
+    string[]
+  >([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -111,6 +117,24 @@ export function BetaRequestForm({
     });
   }
 
+  function toggleLimitedAnswer(
+    option: string,
+    selected: string[],
+    setSelected: Dispatch<SetStateAction<string[]>>,
+  ) {
+    setSelected((current) => {
+      if (current.includes(option)) {
+        return current.filter((value) => value !== option);
+      }
+
+      if (current.length >= 3) {
+        return current;
+      }
+
+      return [...current, option];
+    });
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isSubmitting) return;
@@ -121,9 +145,9 @@ export function BetaRequestForm({
     const name = String(formData.get("name") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim();
     const lifeDecade = String(formData.get("lifeDecade") ?? "").trim();
-    const listeningStyle = String(
-      formData.get("listeningStyle") ?? "",
-    ).trim();
+    const listeningStyles = formData
+      .getAll("listeningStyle")
+      .map(String);
     const collectionHistory = formData
       .getAll("collectionHistory")
       .map(String);
@@ -131,9 +155,9 @@ export function BetaRequestForm({
     const musicServiceOther = String(
       formData.get("musicServiceOther") ?? "",
     ).trim();
-    const sharingReason = String(
-      formData.get("sharingReason") ?? "",
-    ).trim();
+    const sharingReasons = formData
+      .getAll("sharingReason")
+      .map(String);
     const meaningfulStory = String(
       formData.get("meaningfulStory") ?? "",
     ).trim();
@@ -149,8 +173,12 @@ export function BetaRequestForm({
       nextErrors.email = "Please enter a valid email address.";
     }
     if (!lifeDecade) nextErrors.lifeDecade = "Choose an age range.";
-    if (!listeningStyle) {
-      nextErrors.listeningStyle = "Choose the answer that sounds most like you.";
+    if (
+      listeningStyles.length === 0 ||
+      listeningStyles.length > 3
+    ) {
+      nextErrors.listeningStyle =
+        "Choose between one and three answers.";
     }
     if (collectionHistory.length === 0) {
       nextErrors.collectionHistory = "Choose at least one answer.";
@@ -158,8 +186,12 @@ export function BetaRequestForm({
     if (musicServices.length === 0) {
       nextErrors.musicServices = "Choose at least one music service.";
     }
-    if (!sharingReason) {
-      nextErrors.sharingReason = "Choose the closest answer.";
+    if (
+      sharingReasons.length === 0 ||
+      sharingReasons.length > 3
+    ) {
+      nextErrors.sharingReason =
+        "Choose between one and three answers.";
     }
     if (turnstileSiteKey && !turnstileToken) {
       nextErrors.form = "Please complete the anti-spam check.";
@@ -184,8 +216,12 @@ export function BetaRequestForm({
         `collectionGoals` and retain the old form's default numeric value.
       */
       const collectionGoals = [
-        `Listening style — ${listeningStyle}`,
-        `Sharing reason — ${sharingReason}`,
+        ...listeningStyles.map(
+          (answer) => `Listening style — ${answer}`,
+        ),
+        ...sharingReasons.map(
+          (answer) => `Sharing reason — ${answer}`,
+        ),
       ];
 
       const response = await fetch("/access/api/beta-applications", {
@@ -225,6 +261,8 @@ export function BetaRequestForm({
       trackEvent("beta_access_request_submitted", {
         service_count: musicServices.length,
         history_count: collectionHistory.length,
+        listening_style_count: listeningStyles.length,
+        sharing_reason_count: sharingReasons.length,
         has_story: meaningfulStory.length > 0,
       });
     } catch {
@@ -281,22 +319,17 @@ export function BetaRequestForm({
           <h1>Help us build a better way to share music.</h1>
 
           <div className="access-hero-copy">
-            <p>A Mixlist is a new way to share songs.</p>
-
             <p>
-              Instead of sending a playlist all at once, it unfolds one song
-              at a time, in the order you chose, with the story behind each
-              one.
+              A Mixlist is a new way to share songs. Instead of sending a
+              playlist all at once, it unfolds one song at a time, in the
+              order you chose, with the story behind each one.
             </p>
 
             <p>
               Every great Mixlist begins with one person thinking about
-              another. That’s the kind of place we’re trying to build.
-            </p>
-
-            <p>
-              We’re building this with those who already communicate with
-              music, not focus groups.
+              another. That’s the kind of place we’re trying to build. We’re
+              building this with those who already communicate with music,
+              not focus groups.
             </p>
 
             <p>
@@ -418,18 +451,42 @@ export function BetaRequestForm({
                   Which of these sounds most like you? <span>*</span>
                 </legend>
 
+                <p className="access-question-helper">
+                  Choose up to three answers.
+                </p>
+
                 <div className="access-statement-list">
-                  {listeningStyleOptions.map((option) => (
-                    <label className="access-statement-option" key={option}>
-                      <input
-                        aria-invalid={Boolean(errors.listeningStyle)}
-                        name="listeningStyle"
-                        type="radio"
-                        value={option}
-                      />
-                      <span>{option}</span>
-                    </label>
-                  ))}
+                  {listeningStyleOptions.map((option) => {
+                    const isChecked =
+                      selectedListeningStyles.includes(option);
+                    const isDisabled =
+                      !isChecked &&
+                      selectedListeningStyles.length >= 3;
+
+                    return (
+                      <label
+                        className="access-statement-option"
+                        key={option}
+                      >
+                        <input
+                          aria-invalid={Boolean(errors.listeningStyle)}
+                          checked={isChecked}
+                          disabled={isDisabled}
+                          name="listeningStyle"
+                          onChange={() =>
+                            toggleLimitedAnswer(
+                              option,
+                              selectedListeningStyles,
+                              setSelectedListeningStyles,
+                            )
+                          }
+                          type="checkbox"
+                          value={option}
+                        />
+                        <span>{option}</span>
+                      </label>
+                    );
+                  })}
                 </div>
 
                 {errors.listeningStyle ? (
@@ -530,18 +587,42 @@ export function BetaRequestForm({
                   <span>*</span>
                 </legend>
 
+                <p className="access-question-helper">
+                  Choose up to three answers.
+                </p>
+
                 <div className="access-statement-list">
-                  {sharingReasonOptions.map((option) => (
-                    <label className="access-statement-option" key={option}>
-                      <input
-                        aria-invalid={Boolean(errors.sharingReason)}
-                        name="sharingReason"
-                        type="radio"
-                        value={option}
-                      />
-                      <span>{option}</span>
-                    </label>
-                  ))}
+                  {sharingReasonOptions.map((option) => {
+                    const isChecked =
+                      selectedSharingReasons.includes(option);
+                    const isDisabled =
+                      !isChecked &&
+                      selectedSharingReasons.length >= 3;
+
+                    return (
+                      <label
+                        className="access-statement-option"
+                        key={option}
+                      >
+                        <input
+                          aria-invalid={Boolean(errors.sharingReason)}
+                          checked={isChecked}
+                          disabled={isDisabled}
+                          name="sharingReason"
+                          onChange={() =>
+                            toggleLimitedAnswer(
+                              option,
+                              selectedSharingReasons,
+                              setSelectedSharingReasons,
+                            )
+                          }
+                          type="checkbox"
+                          value={option}
+                        />
+                        <span>{option}</span>
+                      </label>
+                    );
+                  })}
                 </div>
 
                 {errors.sharingReason ? (
