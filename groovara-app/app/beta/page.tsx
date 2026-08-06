@@ -90,9 +90,18 @@ export default async function BetaPage({
             </Link>
           </div>
 
-          <p className="mt-5 text-base text-muted-foreground sm:text-lg">
-            And if you don&apos;t, you will soon.
-          </p>
+          <div className="mt-5">
+            <p className="text-base text-muted-foreground sm:text-lg">
+              Don&apos;t have a code yet?
+            </p>
+
+            <Link
+              href="/access"
+              className="mt-4 inline-flex min-w-40 items-center justify-center rounded-full border border-[#57577F]/70 bg-[#57577F]/10 px-7 py-3 text-sm font-medium text-[#3d3150] transition hover:-translate-y-0.5 hover:bg-[#57577F]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#57577F]/35 dark:border-purple-300/45 dark:bg-purple-300/10 dark:text-purple-200 dark:hover:bg-purple-300/15 dark:focus-visible:ring-purple-300/35"
+            >
+              Request beta access
+            </Link>
+          </div>
 
           <div className="mx-auto mt-9 max-w-xl border-t border-border pt-6">
             <p className="text-sm text-muted-foreground sm:text-base">

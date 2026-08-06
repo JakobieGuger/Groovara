@@ -1,0 +1,404 @@
+/*
+  Groovara Beta Access — request-page v2
+  This file is intentionally scoped to `.access-request-v2`.
+  The existing access.css remains responsible for shared/admin styling.
+*/
+
+.access-request-v2 {
+  --request-ink: #4e4b68;
+  --request-paper: #f7f2e8;
+  --request-panel: rgba(250, 247, 238, 0.9);
+  --request-line: rgba(188, 176, 154, 0.58);
+  --request-purple: #5f5d91;
+  --request-purple-deep: #54517f;
+  --request-muted: #777165;
+  --request-shadow: 0 18px 42px rgba(64, 47, 31, 0.13);
+
+  padding: 1.25rem 0 5rem;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(229, 219, 200, 0.72) 0,
+      rgba(229, 219, 200, 0.72) 1.35rem,
+      transparent 1.35rem,
+      transparent calc(100% - 1.35rem),
+      rgba(229, 219, 200, 0.72) calc(100% - 1.35rem)
+    ),
+    var(--access-paper);
+}
+
+html.dark .access-request-v2 {
+  --request-ink: #e6e1ef;
+  --request-paper: #131315;
+  --request-panel: rgba(24, 24, 27, 0.92);
+  --request-line: rgba(255, 255, 255, 0.11);
+  --request-purple: #8b88ba;
+  --request-purple-deep: #7773a8;
+  --request-muted: #aaa4b2;
+  --request-shadow: 0 24px 56px rgba(0, 0, 0, 0.36);
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.025) 0,
+      rgba(255, 255, 255, 0.025) 1.35rem,
+      transparent 1.35rem,
+      transparent calc(100% - 1.35rem),
+      rgba(255, 255, 255, 0.025) calc(100% - 1.35rem)
+    ),
+    var(--access-paper);
+}
+
+.access-request-v2 .access-request-shell {
+  width: min(72rem, calc(100% - 3rem));
+  margin-inline: auto;
+  padding: 0 0 1rem;
+  background: color-mix(in srgb, var(--request-paper) 84%, transparent);
+}
+
+.access-request-v2 .access-header,
+.access-request-v2 .access-hero,
+.access-request-v2 .access-progress-nav,
+.access-request-v2 .access-form {
+  width: calc(100% - 4rem);
+  max-width: none;
+}
+
+.access-request-v2 .access-header {
+  padding: 1.15rem 0 0.75rem;
+}
+
+.access-request-v2 .access-brand {
+  color: var(--request-purple-deep);
+  font-size: 0.72rem;
+  letter-spacing: 0.34em;
+}
+
+.access-request-v2 .access-logo-wrap {
+  width: 2rem;
+  height: 2rem;
+}
+
+.access-request-v2 .access-header-link {
+  min-height: 2.25rem;
+  padding: 0.52rem 0.9rem;
+  font-size: 0.76rem;
+}
+
+.access-request-v2 .access-hero {
+  padding: 2rem 0 0.6rem;
+}
+
+.access-request-v2 .access-hero h1 {
+  max-width: 48rem;
+  margin: 0;
+  color: var(--request-ink);
+  font-size: clamp(3rem, 6.4vw, 5.9rem);
+  font-weight: 650;
+  line-height: 1.04;
+  letter-spacing: -0.048em;
+}
+
+.access-request-v2 .access-hero-copy {
+  max-width: 100%;
+  margin-top: 1.2rem;
+  padding: 1rem 0;
+  color: var(--request-ink);
+  font-size: 1rem;
+  line-height: 1.46;
+}
+
+.access-request-v2 .access-hero-copy p {
+  max-width: 65rem;
+}
+
+.access-request-v2 .access-progress-nav {
+  top: 4.1rem;
+  margin-top: 0.35rem;
+  border-radius: 1.4rem;
+  box-shadow: 0 12px 24px rgba(64, 47, 31, 0.09);
+}
+
+.access-request-v2 .access-progress-nav button {
+  min-height: 3.5rem;
+  color: var(--request-ink);
+  font-size: 0.78rem;
+}
+
+.access-request-v2 .access-progress-nav button.active {
+  background: var(--request-purple);
+  color: white;
+}
+
+.access-request-v2 .access-form {
+  gap: 1.9rem;
+  padding-top: 1.35rem;
+}
+
+.access-request-v2 .access-required-note {
+  color: var(--request-muted);
+}
+
+.access-request-v2 .access-form-section {
+  grid-template-columns: 16rem minmax(0, 1fr);
+  gap: 2.65rem;
+  padding: 2.55rem 2.7rem;
+  border-color: var(--request-line);
+  border-radius: 2.15rem;
+  background: var(--request-panel);
+  box-shadow: var(--request-shadow);
+}
+
+.access-request-v2 .access-section-heading h2 {
+  color: var(--request-muted);
+  font-size: 1rem;
+}
+
+.access-request-v2 .access-section-kicker {
+  color: var(--request-purple-deep);
+  font-size: 0.68rem;
+}
+
+.access-request-v2 .access-question-block legend,
+.access-request-v2 .access-text-field > span {
+  color: var(--request-ink);
+  font-size: 0.98rem;
+}
+
+.access-request-v2 .access-question-helper {
+  color: var(--request-muted);
+  font-size: 0.79rem;
+}
+
+.access-request-v2 .access-field-grid {
+  gap: 1rem;
+}
+
+.access-request-v2 .access-choice-row,
+.access-request-v2 .access-inline-input,
+.access-request-v2 .access-text-field input,
+.access-request-v2 .access-text-field textarea {
+  border-color: var(--request-line);
+  background: color-mix(in srgb, var(--request-paper) 82%, transparent);
+  color: var(--request-ink);
+}
+
+.access-request-v2 .access-choice-row {
+  min-height: 3rem;
+  border-radius: 1rem;
+  padding: 0.68rem 0.85rem;
+}
+
+.access-request-v2 .access-choice-row:hover,
+.access-request-v2 .access-choice-row:focus-within {
+  border-color: color-mix(
+    in srgb,
+    var(--request-purple) 45%,
+    var(--request-line)
+  );
+  background: var(--request-paper);
+}
+
+.access-request-v2 input[type="checkbox"],
+.access-request-v2 input[type="radio"] {
+  accent-color: var(--request-purple);
+}
+
+.access-request-v2 .access-statement-list {
+  display: grid;
+  gap: 0.16rem;
+  padding: 0.85rem 1rem;
+  background: color-mix(in srgb, var(--request-paper) 72%, transparent);
+}
+
+.access-request-v2 .access-statement-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  color: var(--request-ink);
+  cursor: pointer;
+}
+
+.access-request-v2 .access-statement-option {
+  padding: 0.14rem 0;
+  font-size: 0.95rem;
+  line-height: 1.32;
+}
+
+.access-request-v2 .access-statement-option input {
+  margin-top: 0.19rem;
+  flex: 0 0 auto;
+}
+
+.access-request-v2 .access-text-field textarea {
+  min-height: 10rem;
+}
+
+.access-request-v2 .access-privacy-note {
+  margin-top: 2.35rem;
+  padding: 0.65rem 1rem;
+  background: color-mix(in srgb, var(--request-paper) 62%, transparent);
+  color: var(--request-ink);
+  text-align: center;
+  font-size: 0.9rem;
+  font-style: italic;
+  line-height: 1.15;
+}
+
+.access-request-v2 .access-privacy-note p {
+  margin: 0;
+}
+
+.access-request-v2 .access-privacy-note a {
+  color: var(--request-purple-deep);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.access-request-v2 .access-submit-row {
+  justify-content: center;
+  margin-top: 2.6rem;
+}
+
+.access-request-v2 .access-primary-button {
+  min-width: 19rem;
+  min-height: 3.15rem;
+  border-color: transparent;
+  background: var(--request-purple);
+  color: white;
+  box-shadow: 0 12px 24px
+    color-mix(in srgb, var(--request-purple) 22%, transparent);
+}
+
+.access-request-v2 .access-primary-button:hover {
+  background: var(--request-purple-deep);
+}
+
+.access-request-v2 .access-field-error {
+  margin-top: 0.5rem;
+}
+
+.access-request-v2 .access-ring-hero {
+  top: -18rem;
+  right: -13rem;
+}
+
+.access-request-v2 .access-ring-left {
+  top: 42%;
+}
+
+.access-request-v2 .access-ring-footer {
+  right: 6%;
+  bottom: -16rem;
+}
+
+@media (max-width: 900px) {
+  .access-request-v2 .access-request-shell {
+    width: min(100% - 1.5rem, 72rem);
+  }
+
+  .access-request-v2 .access-header,
+  .access-request-v2 .access-hero,
+  .access-request-v2 .access-progress-nav,
+  .access-request-v2 .access-form {
+    width: calc(100% - 2rem);
+  }
+
+  .access-request-v2 .access-form-section {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding: 2rem;
+  }
+
+  .access-request-v2 .access-section-heading {
+    position: static;
+  }
+
+  .access-request-v2 .access-section-heading h2 {
+    max-width: 32rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .access-request-v2 {
+    padding-top: 0.5rem;
+    background: var(--access-paper);
+  }
+
+  .access-request-v2 .access-request-shell {
+    width: calc(100% - 0.75rem);
+  }
+
+  .access-request-v2 .access-header,
+  .access-request-v2 .access-hero,
+  .access-request-v2 .access-progress-nav,
+  .access-request-v2 .access-form {
+    width: calc(100% - 1.25rem);
+  }
+
+  .access-request-v2 .access-header {
+    padding-top: 0.8rem;
+  }
+
+  .access-request-v2 .access-brand {
+    letter-spacing: 0.24em;
+  }
+
+  .access-request-v2 .access-hero {
+    padding-top: 1.3rem;
+  }
+
+  .access-request-v2 .access-hero h1 {
+    font-size: clamp(2.65rem, 13vw, 4rem);
+  }
+
+  .access-request-v2 .access-hero-copy {
+    font-size: 0.93rem;
+  }
+
+  .access-request-v2 .access-progress-nav {
+    top: 3.8rem;
+  }
+
+  .access-request-v2 .access-progress-nav button {
+    min-height: 3.25rem;
+    flex-direction: column;
+    gap: 0.18rem;
+    padding: 0.55rem 0.25rem;
+    font-size: 0.7rem;
+  }
+
+  .access-request-v2 .access-form-section {
+    padding: 1.45rem;
+    border-radius: 1.55rem;
+  }
+
+  .access-request-v2 .access-field-grid,
+  .access-request-v2 .access-choice-grid-compact {
+    grid-template-columns: 1fr;
+  }
+
+  .access-request-v2 .access-choice-with-input {
+    grid-template-columns: 1fr;
+  }
+
+  .access-request-v2 .access-primary-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .access-request-v2 .access-ring-left {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .access-request-v2 *,
+  .access-request-v2 *::before,
+  .access-request-v2 *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import ThemeToggle from "@/lib/ThemeToggle";
 import { trackEvent } from "@/lib/analytics";
 
@@ -16,13 +16,20 @@ type FormErrors = Partial<
     | "name"
     | "email"
     | "lifeDecade"
+    | "listeningStyle"
     | "collectionHistory"
-    | "collectionGoals"
     | "musicServices"
+    | "sharingReason"
     | "form",
     string
   >
 >;
+
+const sectionLinks = [
+  { id: "about", number: "01", label: "About you" },
+  { id: "listening", number: "02", label: "Your listening" },
+  { id: "intent", number: "03", label: "Why Groovara" },
+];
 
 const decadeOptions = [
   "Under 18",
@@ -34,6 +41,14 @@ const decadeOptions = [
   "65+",
 ];
 
+const listeningStyleOptions = [
+  "Music is usually in the background while I do other things.",
+  "I have playlists for almost everything.",
+  "Certain songs are tied to specific people or memories.",
+  "I often share songs because they say something I can’t.",
+  "Music is one of the ways I understand myself.",
+];
+
 const collectionHistoryOptions = [
   "Streaming playlists",
   "CDs or vinyl",
@@ -42,34 +57,51 @@ const collectionHistoryOptions = [
   "I mostly listen without organizing",
 ];
 
-const collectionGoalOptions = [
-  "Share music more thoughtfully",
-  "Build gifts or listening experiences",
-  "Keep music memories in one place",
-  "Organize songs across platforms",
-  "Discover what friends care about",
-  "Other",
-];
-
 const musicServiceOptions = ["Spotify", "YouTube", "Apple Music", "Other"];
+
+const sharingReasonOptions = [
+  "I think they’ll enjoy it",
+  "It reminds me of them",
+  "It says something I don’t know how to put into words",
+  "I want us to experience it together",
+  "I don’t really share music very often",
+];
 
 export function BetaRequestForm({
   turnstileSiteKey,
 }: BetaRequestFormProps) {
-  const [musicMeaning, setMusicMeaning] = useState(7);
   const [activeSection, setActiveSection] = useState("about");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
 
-  const sectionLinks = useMemo(
-    () => [
-      { id: "about", number: "01", label: "About you" },
-      { id: "listening", number: "02", label: "Your listening" },
-      { id: "intent", number: "03", label: "Why Groovara" },
-    ],
-    [],
-  );
+  useEffect(() => {
+    const sections = sectionLinks
+      .map((section) => document.getElementById(section.id))
+      .filter((section): section is HTMLElement => Boolean(section));
+
+    if (sections.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntry = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+
+        if (visibleEntry?.target.id) {
+          setActiveSection(visibleEntry.target.id);
+        }
+      },
+      {
+        rootMargin: "-22% 0px -58% 0px",
+        threshold: [0.08, 0.2, 0.45],
+      },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+
+    return () => observer.disconnect();
+  }, []);
 
   function jumpToSection(sectionId: string) {
     setActiveSection(sectionId);
@@ -89,16 +121,18 @@ export function BetaRequestForm({
     const name = String(formData.get("name") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim();
     const lifeDecade = String(formData.get("lifeDecade") ?? "").trim();
+    const listeningStyle = String(
+      formData.get("listeningStyle") ?? "",
+    ).trim();
     const collectionHistory = formData
       .getAll("collectionHistory")
       .map(String);
-    const collectionGoals = formData.getAll("collectionGoals").map(String);
     const musicServices = formData.getAll("musicServices").map(String);
-    const collectionGoalOther = String(
-      formData.get("collectionGoalOther") ?? "",
-    ).trim();
     const musicServiceOther = String(
       formData.get("musicServiceOther") ?? "",
+    ).trim();
+    const sharingReason = String(
+      formData.get("sharingReason") ?? "",
     ).trim();
     const meaningfulStory = String(
       formData.get("meaningfulStory") ?? "",
@@ -115,14 +149,17 @@ export function BetaRequestForm({
       nextErrors.email = "Please enter a valid email address.";
     }
     if (!lifeDecade) nextErrors.lifeDecade = "Choose an age range.";
+    if (!listeningStyle) {
+      nextErrors.listeningStyle = "Choose the answer that sounds most like you.";
+    }
     if (collectionHistory.length === 0) {
       nextErrors.collectionHistory = "Choose at least one answer.";
     }
-    if (collectionGoals.length === 0) {
-      nextErrors.collectionGoals = "Choose at least one goal.";
-    }
     if (musicServices.length === 0) {
       nextErrors.musicServices = "Choose at least one music service.";
+    }
+    if (!sharingReason) {
+      nextErrors.sharingReason = "Choose the closest answer.";
     }
     if (turnstileSiteKey && !turnstileToken) {
       nextErrors.form = "Please complete the anti-spam check.";
@@ -131,7 +168,8 @@ export function BetaRequestForm({
     setErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
-      const firstInvalid = form.querySelector<HTMLElement>("[aria-invalid='true']");
+      const firstInvalid =
+        form.querySelector<HTMLElement>("[aria-invalid='true']");
       firstInvalid?.focus();
       return;
     }
@@ -139,17 +177,28 @@ export function BetaRequestForm({
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("access/api/beta-applications", {
+      /*
+        The current API stores `collectionGoals` and a numeric
+        `musicMeaning`. Until that endpoint gets its own schema migration,
+        preserve both new qualitative answers as clearly labeled values in
+        `collectionGoals` and retain the old form's default numeric value.
+      */
+      const collectionGoals = [
+        `Listening style — ${listeningStyle}`,
+        `Sharing reason — ${sharingReason}`,
+      ];
+
+      const response = await fetch("/access/api/beta-applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
           email,
           lifeDecade,
-          musicMeaning,
+          musicMeaning: 7,
           collectionHistory,
           collectionGoals,
-          collectionGoalOther,
+          collectionGoalOther: "",
           musicServices,
           musicServiceOther,
           meaningfulStory,
@@ -164,7 +213,7 @@ export function BetaRequestForm({
 
       if (!response.ok) {
         setErrors({
-          form: result?.error ?? "We couldn't submit your request. Try again.",
+          form: result?.error ?? "We couldn’t submit your request. Try again.",
         });
         trackEvent("beta_access_request_failed", {
           status_code: response.status,
@@ -174,13 +223,14 @@ export function BetaRequestForm({
 
       setSubmitted(true);
       trackEvent("beta_access_request_submitted", {
-        music_meaning: musicMeaning,
         service_count: musicServices.length,
-        goal_count: collectionGoals.length,
+        history_count: collectionHistory.length,
+        has_story: meaningfulStory.length > 0,
       });
     } catch {
       setErrors({
-        form: "We couldn't reach Groovara. Check your connection and try again.",
+        form:
+          "We couldn’t reach Groovara. Check your connection and try again.",
       });
       trackEvent("beta_access_request_failed", {
         status_code: 0,
@@ -192,19 +242,19 @@ export function BetaRequestForm({
 
   if (submitted) {
     return (
-      <main className="access-page access-success-page">
+      <main className="access-page access-request-v2 access-success-page">
         <div aria-hidden="true" className="access-ring access-ring-hero" />
-
         <AccessHeader />
 
         <section className="access-success-panel" aria-live="polite">
           <p className="access-eyebrow">Request received</p>
           <h1>Your note is in the listening room.</h1>
           <p>
-            Thanks for taking the time to tell us how music fits into your life.
-            We&apos;ll review your request and contact you at the email you
+            Thanks for taking the time to tell us how music fits into your
+            life. We’ll review your request and contact you at the email you
             provided if a beta place opens up.
           </p>
+
           <div className="access-success-actions">
             <Link className="access-primary-button" href="/">
               Return home
@@ -219,185 +269,233 @@ export function BetaRequestForm({
   }
 
   return (
-    <main className="access-page">
+    <main className="access-page access-request-v2">
       <div aria-hidden="true" className="access-ring access-ring-hero" />
       <div aria-hidden="true" className="access-ring access-ring-left" />
       <div aria-hidden="true" className="access-ring access-ring-footer" />
 
-      <AccessHeader />
+      <div className="access-request-shell">
+        <AccessHeader />
 
-      <section className="access-hero">
-        <p className="access-eyebrow">Private beta</p>
-        <h1>Help shape a more thoughtful way to share music.</h1>
-        <div className="access-hero-copy">
-          <p>
-            Groovara turns a list of songs into a paced listening experience:
-            one that can carry notes, memories, and a little anticipation.
-          </p>
-          <p>
-            We&apos;re inviting a small group of listeners to try it early and
-            tell us what feels meaningful, confusing, or missing.
-          </p>
-        </div>
-      </section>
+        <section className="access-hero">
+          <h1>Help us build a better way to share music.</h1>
 
-      <nav className="access-progress-nav" aria-label="Application sections">
-        {sectionLinks.map((section) => (
-          <button
-            className={activeSection === section.id ? "active" : ""}
-            key={section.id}
-            type="button"
-            onClick={() => jumpToSection(section.id)}
-          >
-            <span>{section.number}</span>
-            {section.label}
-          </button>
-        ))}
-      </nav>
+          <div className="access-hero-copy">
+            <p>A Mixlist is a new way to share songs.</p>
 
-      <form className="access-form" onSubmit={handleSubmit} noValidate>
-        <p className="access-required-note">
-          <span>*</span> Required
-        </p>
+            <p>
+              Instead of sending a playlist all at once, it unfolds one song
+              at a time, in the order you chose, with the story behind each
+              one.
+            </p>
 
-        <section className="access-form-section" id="about">
-          <div className="access-section-heading">
-            <p className="access-section-kicker">01 · About you</p>
-            <h2>A little context helps us build for actual listeners.</h2>
-          </div>
+            <p>
+              Every great Mixlist begins with one person thinking about
+              another. That’s the kind of place we’re trying to build.
+            </p>
 
-          <div>
-            <div className="access-field-grid">
-              <label className="access-text-field">
-                <span>
-                  Name <b>*</b>
-                </span>
-                <input
-                  aria-invalid={Boolean(errors.name)}
-                  autoComplete="name"
-                  name="name"
-                  type="text"
-                />
-                {errors.name ? (
-                  <small className="access-field-error">{errors.name}</small>
-                ) : null}
-              </label>
+            <p>
+              We’re building this with those who already communicate with
+              music, not focus groups.
+            </p>
 
-              <label className="access-text-field">
-                <span>
-                  Email <b>*</b>
-                </span>
-                <input
-                  aria-invalid={Boolean(errors.email)}
-                  autoComplete="email"
-                  name="email"
-                  type="email"
-                />
-                {errors.email ? (
-                  <small className="access-field-error">{errors.email}</small>
-                ) : null}
-              </label>
-            </div>
-
-            <fieldset className="access-question-block">
-              <legend>
-                What stage of life are you in? <span>*</span>
-              </legend>
-              <p className="access-question-helper">
-                This is used only to understand whether the beta reflects a
-                useful range of listeners.
-              </p>
-              <div className="access-choice-grid access-choice-grid-compact">
-                {decadeOptions.map((option) => (
-                  <label className="access-choice-row" key={option}>
-                    <input
-                      aria-invalid={Boolean(errors.lifeDecade)}
-                      name="lifeDecade"
-                      type="radio"
-                      value={option}
-                    />
-                    <span>{option}</span>
-                  </label>
-                ))}
-              </div>
-              {errors.lifeDecade ? (
-                <small className="access-field-error">
-                  {errors.lifeDecade}
-                </small>
-              ) : null}
-            </fieldset>
+            <p>
+              We’ll be inviting people in through small beta waves. If you’d
+              like to help shape what’s next, tell us a little about yourself
+              below.
+            </p>
           </div>
         </section>
 
-        <section className="access-form-section" id="listening">
-          <div className="access-section-heading">
-            <p className="access-section-kicker">02 · Your listening</p>
-            <h2>How music already lives in your routines and collections.</h2>
-          </div>
+        <nav
+          className="access-progress-nav"
+          aria-label="Application sections"
+        >
+          {sectionLinks.map((section) => (
+            <button
+              className={activeSection === section.id ? "active" : ""}
+              key={section.id}
+              type="button"
+              onClick={() => jumpToSection(section.id)}
+            >
+              <span>{section.number}</span>
+              {section.label}
+            </button>
+          ))}
+        </nav>
 
-          <div>
-            <fieldset className="access-question-block">
-              <legend>How meaningful is music in your day-to-day life?</legend>
-              <div className="access-range-answer">
-                <div className="access-range-label-row">
-                  <p>Something I enjoy in the background</p>
-                  <output htmlFor="musicMeaning">{musicMeaning}</output>
-                  <p>A major part of how I remember and connect</p>
-                </div>
-                <div className="access-range-control">
+        <form className="access-form" onSubmit={handleSubmit} noValidate>
+          <p className="access-required-note">
+            <span>*</span> Required
+          </p>
+
+          <section className="access-form-section" id="about">
+            <div className="access-section-heading">
+              <p className="access-section-kicker">01 · About you</p>
+              <h2>A little context helps us build for actual listeners.</h2>
+            </div>
+
+            <div>
+              <div className="access-field-grid">
+                <label className="access-text-field">
+                  <span>
+                    Name <b>*</b>
+                  </span>
                   <input
-                    id="musicMeaning"
-                    max="10"
-                    min="1"
-                    name="musicMeaning"
-                    type="range"
-                    value={musicMeaning}
-                    onChange={(event) =>
-                      setMusicMeaning(Number(event.target.value))
-                    }
+                    aria-invalid={Boolean(errors.name)}
+                    autoComplete="name"
+                    name="name"
+                    type="text"
                   />
-                  <div className="access-range-numbers" aria-hidden="true">
-                    {Array.from({ length: 10 }, (_, index) => (
-                      <span key={index + 1}>{index + 1}</span>
-                    ))}
-                  </div>
+                  {errors.name ? (
+                    <small className="access-field-error">
+                      {errors.name}
+                    </small>
+                  ) : null}
+                </label>
+
+                <label className="access-text-field">
+                  <span>
+                    Email <b>*</b>
+                  </span>
+                  <input
+                    aria-invalid={Boolean(errors.email)}
+                    autoComplete="email"
+                    name="email"
+                    type="email"
+                  />
+                  {errors.email ? (
+                    <small className="access-field-error">
+                      {errors.email}
+                    </small>
+                  ) : null}
+                </label>
+              </div>
+
+              <fieldset className="access-question-block">
+                <legend>
+                  What stage of life are you in? <span>*</span>
+                </legend>
+                <p className="access-question-helper">
+                  This is used only to understand whether the beta reflects a
+                  useful range of listeners.
+                </p>
+
+                <div className="access-choice-grid access-choice-grid-compact">
+                  {decadeOptions.map((option) => (
+                    <label className="access-choice-row" key={option}>
+                      <input
+                        aria-invalid={Boolean(errors.lifeDecade)}
+                        name="lifeDecade"
+                        type="radio"
+                        value={option}
+                      />
+                      <span>{option}</span>
+                    </label>
+                  ))}
                 </div>
-              </div>
-            </fieldset>
 
-            <fieldset className="access-question-block">
-              <legend>
-                How have you kept or organized music before? <span>*</span>
-              </legend>
-              <div className="access-choice-grid">
-                {collectionHistoryOptions.map((option) => (
-                  <label className="access-choice-row" key={option}>
-                    <input
-                      aria-invalid={Boolean(errors.collectionHistory)}
-                      name="collectionHistory"
-                      type="checkbox"
-                      value={option}
-                    />
-                    <span>{option}</span>
-                  </label>
-                ))}
-              </div>
-              {errors.collectionHistory ? (
-                <small className="access-field-error">
-                  {errors.collectionHistory}
-                </small>
-              ) : null}
-            </fieldset>
+                {errors.lifeDecade ? (
+                  <small className="access-field-error">
+                    {errors.lifeDecade}
+                  </small>
+                ) : null}
+              </fieldset>
+            </div>
+          </section>
 
-            <fieldset className="access-question-block">
-              <legend>
-                Which services do you currently use? <span>*</span>
-              </legend>
-              <div className="access-choice-grid">
-                {musicServiceOptions.map((option) =>
-                  option === "Other" ? (
-                    <div className="access-choice-row access-choice-with-input" key={option}>
-                      <label>
+          <section className="access-form-section" id="listening">
+            <div className="access-section-heading">
+              <p className="access-section-kicker">02 · Your listening</p>
+              <h2>
+                How music already lives in your routines and collections.
+              </h2>
+            </div>
+
+            <div>
+              <fieldset className="access-question-block">
+                <legend>
+                  Which of these sounds most like you? <span>*</span>
+                </legend>
+
+                <div className="access-statement-list">
+                  {listeningStyleOptions.map((option) => (
+                    <label className="access-statement-option" key={option}>
+                      <input
+                        aria-invalid={Boolean(errors.listeningStyle)}
+                        name="listeningStyle"
+                        type="radio"
+                        value={option}
+                      />
+                      <span>{option}</span>
+                    </label>
+                  ))}
+                </div>
+
+                {errors.listeningStyle ? (
+                  <small className="access-field-error">
+                    {errors.listeningStyle}
+                  </small>
+                ) : null}
+              </fieldset>
+
+              <fieldset className="access-question-block">
+                <legend>
+                  How have you kept or organized music before? <span>*</span>
+                </legend>
+
+                <div className="access-choice-grid">
+                  {collectionHistoryOptions.map((option) => (
+                    <label className="access-choice-row" key={option}>
+                      <input
+                        aria-invalid={Boolean(errors.collectionHistory)}
+                        name="collectionHistory"
+                        type="checkbox"
+                        value={option}
+                      />
+                      <span>{option}</span>
+                    </label>
+                  ))}
+                </div>
+
+                {errors.collectionHistory ? (
+                  <small className="access-field-error">
+                    {errors.collectionHistory}
+                  </small>
+                ) : null}
+              </fieldset>
+
+              <fieldset className="access-question-block">
+                <legend>
+                  Which services do you currently use? <span>*</span>
+                </legend>
+
+                <div className="access-choice-grid">
+                  {musicServiceOptions.map((option) =>
+                    option === "Other" ? (
+                      <div
+                        className="access-choice-row access-choice-with-input"
+                        key={option}
+                      >
+                        <label>
+                          <input
+                            aria-invalid={Boolean(errors.musicServices)}
+                            name="musicServices"
+                            type="checkbox"
+                            value={option}
+                          />
+                          <span>{option}</span>
+                        </label>
+                        <input
+                          aria-label="Other music service"
+                          className="access-inline-input"
+                          name="musicServiceOther"
+                          placeholder="Bandcamp, SoundCloud, local files…"
+                          type="text"
+                        />
+                      </div>
+                    ) : (
+                      <label className="access-choice-row" key={option}>
                         <input
                           aria-invalid={Boolean(errors.musicServices)}
                           name="musicServices"
@@ -406,132 +504,118 @@ export function BetaRequestForm({
                         />
                         <span>{option}</span>
                       </label>
-                      <input
-                        aria-label="Other music service"
-                        className="access-inline-input"
-                        name="musicServiceOther"
-                        placeholder="Bandcamp, SoundCloud, local files…"
-                        type="text"
-                      />
-                    </div>
-                  ) : (
-                    <label className="access-choice-row" key={option}>
-                      <input
-                        aria-invalid={Boolean(errors.musicServices)}
-                        name="musicServices"
-                        type="checkbox"
-                        value={option}
-                      />
-                      <span>{option}</span>
-                    </label>
-                  ),
-                )}
-              </div>
-              {errors.musicServices ? (
-                <small className="access-field-error">
-                  {errors.musicServices}
-                </small>
-              ) : null}
-            </fieldset>
-          </div>
-        </section>
+                    ),
+                  )}
+                </div>
 
-        <section className="access-form-section" id="intent">
-          <div className="access-section-heading">
-            <p className="access-section-kicker">03 · Why Groovara</p>
-            <h2>What would make this feel worth returning to?</h2>
-          </div>
-
-          <div>
-            <fieldset className="access-question-block">
-              <legend>
-                What would you most like to use Groovara for? <span>*</span>
-              </legend>
-              <div className="access-choice-grid">
-                {collectionGoalOptions.map((option) =>
-                  option === "Other" ? (
-                    <div className="access-choice-row access-choice-with-input" key={option}>
-                      <label>
-                        <input
-                          aria-invalid={Boolean(errors.collectionGoals)}
-                          name="collectionGoals"
-                          type="checkbox"
-                          value={option}
-                        />
-                        <span>{option}</span>
-                      </label>
-                      <input
-                        aria-label="Other Groovara goal"
-                        className="access-inline-input"
-                        name="collectionGoalOther"
-                        placeholder="Something else…"
-                        type="text"
-                      />
-                    </div>
-                  ) : (
-                    <label className="access-choice-row" key={option}>
-                      <input
-                        aria-invalid={Boolean(errors.collectionGoals)}
-                        name="collectionGoals"
-                        type="checkbox"
-                        value={option}
-                      />
-                      <span>{option}</span>
-                    </label>
-                  ),
-                )}
-              </div>
-              {errors.collectionGoals ? (
-                <small className="access-field-error">
-                  {errors.collectionGoals}
-                </small>
-              ) : null}
-            </fieldset>
-
-            <label className="access-text-field access-textarea-field">
-              <span>Tell us about a song, playlist, or mix that mattered to you.</span>
-              <p className="access-question-helper">
-                Optional, but this is often the most useful answer in the whole
-                request.
-              </p>
-              <textarea
-                maxLength={2000}
-                name="meaningfulStory"
-                placeholder="A few sentences is plenty."
-              />
-            </label>
-
-            <label className="access-hp-field" aria-hidden="true">
-              Website
-              <input autoComplete="off" name="website" tabIndex={-1} type="text" />
-            </label>
-
-            {turnstileSiteKey ? (
-              <div
-                className="cf-turnstile"
-                data-sitekey={turnstileSiteKey}
-                data-theme="auto"
-              />
-            ) : null}
-
-            {errors.form ? (
-              <p className="access-form-error" role="alert">
-                {errors.form}
-              </p>
-            ) : null}
-
-            <div className="access-submit-row">
-              <button
-                className="access-primary-button"
-                disabled={isSubmitting}
-                type="submit"
-              >
-                {isSubmitting ? "Sending request…" : "Request beta access"}
-              </button>
+                {errors.musicServices ? (
+                  <small className="access-field-error">
+                    {errors.musicServices}
+                  </small>
+                ) : null}
+              </fieldset>
             </div>
-          </div>
-        </section>
-      </form>
+          </section>
+
+          <section className="access-form-section" id="intent">
+            <div className="access-section-heading">
+              <p className="access-section-kicker">03 · Why Groovara</p>
+              <h2>What would make this feel worth returning to?</h2>
+            </div>
+
+            <div>
+              <fieldset className="access-question-block">
+                <legend>
+                  When you share a song with someone, it’s usually because…
+                  <span>*</span>
+                </legend>
+
+                <div className="access-statement-list">
+                  {sharingReasonOptions.map((option) => (
+                    <label className="access-statement-option" key={option}>
+                      <input
+                        aria-invalid={Boolean(errors.sharingReason)}
+                        name="sharingReason"
+                        type="radio"
+                        value={option}
+                      />
+                      <span>{option}</span>
+                    </label>
+                  ))}
+                </div>
+
+                {errors.sharingReason ? (
+                  <small className="access-field-error">
+                    {errors.sharingReason}
+                  </small>
+                ) : null}
+              </fieldset>
+
+              <label className="access-text-field access-textarea-field">
+                <span>
+                  Tell us about a song, playlist, or mix that mattered to you.
+                </span>
+                <p className="access-question-helper">
+                  Optional, but this is often the most useful answer in the
+                  whole request.
+                </p>
+                <textarea
+                  maxLength={2000}
+                  name="meaningfulStory"
+                  placeholder="A few sentences is plenty."
+                />
+              </label>
+
+              <label className="access-hp-field" aria-hidden="true">
+                Website
+                <input
+                  autoComplete="off"
+                  name="website"
+                  tabIndex={-1}
+                  type="text"
+                />
+              </label>
+
+              {turnstileSiteKey ? (
+                <div
+                  className="cf-turnstile"
+                  data-sitekey={turnstileSiteKey}
+                  data-theme="auto"
+                />
+              ) : null}
+
+              {errors.form ? (
+                <p className="access-form-error" role="alert">
+                  {errors.form}
+                </p>
+              ) : null}
+
+              <div className="access-privacy-note">
+                <p>
+                  We read every response ourselves, and we won’t sell or share
+                  your information.
+                </p>
+                <p>
+                  Full details in our{" "}
+                  <Link href="/privacy">Privacy Policy</Link>.
+                </p>
+              </div>
+
+              <div className="access-submit-row">
+                <button
+                  className="access-primary-button"
+                  disabled={isSubmitting}
+                  type="submit"
+                >
+                  {isSubmitting
+                    ? "Sending request…"
+                    : "Request beta access"}
+                </button>
+              </div>
+            </div>
+          </section>
+        </form>
+      </div>
     </main>
   );
 }
