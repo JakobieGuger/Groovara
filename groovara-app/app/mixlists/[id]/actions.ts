@@ -70,7 +70,7 @@ export async function copyMixlistToStudioAction(
 
   const { data: mixlist, error: mixlistError } = await supabase
     .from("mixlists")
-    .select("id,title")
+    .select("id,title,message,finishing_note")
     .eq("id", mixlistId)
     .maybeSingle();
 
@@ -110,7 +110,8 @@ export async function copyMixlistToStudioAction(
     .insert({
       user_id: user.id,
       title: studioTitle,
-      description: null,
+      description: mixlist.message?.trim() || null,
+      finishing_note: mixlist.finishing_note?.trim() || null,
       status: "draft",
       updated_at: now,
     })

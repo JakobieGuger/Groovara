@@ -27,6 +27,7 @@ type Tracklist = {
   id: string;
   title: string;
   description: string | null;
+  finishing_note: string | null;
 };
 
 type TrackSong = {
@@ -361,7 +362,7 @@ export default function TracklistDetailPage() {
 
       const { data, error } = await supabase
         .from("tracklists")
-        .select("id,title,description")
+        .select("id,title,description,finishing_note")
         .eq("id", id)
         .single();
 
@@ -375,6 +376,7 @@ export default function TracklistDetailPage() {
       setItem(t);
       setTitle(t.title);
       setDescription(t.description ?? "");
+      setMixFinish(t.finishing_note ?? "");
 
       const { data: songData, error: songError } = await supabase
         .from("tracklist_songs")
@@ -426,6 +428,7 @@ export default function TracklistDetailPage() {
       tracklistId: String(id),
       title,
       description,
+      finishing_note: mixFinish,
     });
 
     if (!result.ok) {
@@ -458,9 +461,16 @@ export default function TracklistDetailPage() {
 
     const trimmed = title.trim();
     const nextDescription = description.trim() || null;
-    setItem({ ...item, title: trimmed, description: nextDescription });
+    const nextFinishingNote = mixFinish.trim() || null;
+    setItem({
+      ...item,
+      title: trimmed,
+      description: nextDescription,
+      finishing_note: nextFinishingNote,
+    });
     setTitle(trimmed);
     setDescription(nextDescription ?? "");
+    setMixFinish(nextFinishingNote ?? "");
     setPageInfo("Draft saved to In Progress.");
     window.setTimeout(() => setPageInfo(null), 1400);
 
@@ -927,7 +937,7 @@ export default function TracklistDetailPage() {
               value={multiNoteText}
               onChange={(e) => setMultiNoteText(e.target.value)}
               maxLength={SONG_NOTE_LIMIT}
-              className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+              className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-[#2d2533] dark:text-gray-100 outline-none focus:border-purple-500/40"
               rows={4}
               placeholder="Write a note to apply to the selected songs…"
             />
@@ -979,7 +989,7 @@ export default function TracklistDetailPage() {
                 <input
                   value={mTitle}
                   onChange={(e) => setMTitle(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-[#2d2533] dark:text-gray-100 outline-none focus:border-purple-500/40"
                   placeholder="Song title"
                 />
 
@@ -1159,7 +1169,7 @@ export default function TracklistDetailPage() {
               value={mixFinish}
               onChange={(e) => setMixFinish(e.target.value)}
               maxLength={FINISHING_NOTE_LIMIT}
-              className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-100 outline-none focus:border-purple-500/40"
+              className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-[#2d2533] dark:text-gray-100 outline-none focus:border-purple-500/40"
               rows={4}
               placeholder="Finishing note (only shown at the end)…"
             />

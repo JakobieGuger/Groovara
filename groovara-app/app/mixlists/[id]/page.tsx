@@ -261,6 +261,23 @@ function buildManualYouTubeSearchUrl(title: string, artist: string) {
 const SHOW_YOUTUBE_EXPORT_DEBUG =
   process.env.NEXT_PUBLIC_SHOW_EXPORT_DEBUG === "true";
 
+const BETA_CTA_MIXLIST_ID = "3a6aea62-569e-499b-9fa5-0c4b4c41107f";
+
+function openExternalExportUrl(url: string) {
+  const opened = window.open(url, "_blank");
+
+  if (opened) {
+    try {
+      opened.opener = null;
+    } catch {}
+    return;
+  }
+
+  // Async export requests can cause browsers to block a new tab.
+  // Falling back to same-tab navigation guarantees the exported playlist opens.
+  window.location.assign(url);
+}
+
 export default function MixlistPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -383,8 +400,17 @@ export default function MixlistPage() {
 
       const data = await res.json();
 
+      if (
+        (res.status === 409 || res.status === 401) &&
+        data?.connectUrl
+      ) {
+        window.location.href = data.connectUrl;
+        return;
+      }
+
       if (!res.ok) {
-        alert(data?.error ?? "Spotify export failed.");
+        const codeSuffix = data?.code ? " (" + data.code + ")" : "";
+        alert((data?.error ?? "Spotify export failed.") + codeSuffix);
         return;
       }
 
@@ -395,7 +421,7 @@ export default function MixlistPage() {
       });
 
       if (data?.playlistUrl) {
-        window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
+        openExternalExportUrl(data.playlistUrl);
       } else {
         alert("Exported to Spotify.");
       }
@@ -515,7 +541,7 @@ export default function MixlistPage() {
         const exportedCount = Number(data?.exportedCount ?? 0);
 
         if (data?.playlistUrl && exportedCount > 0) {
-          window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
+          openExternalExportUrl(data.playlistUrl);
         }
 
         const codeSuffix = data?.code ? " (" + data.code + ")" : "";
@@ -554,7 +580,7 @@ export default function MixlistPage() {
       setYouTubePreviewError(null);
 
       if (data?.playlistUrl) {
-        window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
+        openExternalExportUrl(data.playlistUrl);
       }
     } catch (error) {
       console.error("YouTube export failed", error);
@@ -1207,12 +1233,12 @@ export default function MixlistPage() {
     showEndPanel && Boolean((mix?.finishing_note ?? "").trim());
 
   const noteRangeLabel = useMemo(() => {
-    if (!activeSong) return "SONG NOTE";
+    if (!activeSong) return "SONG";
 
     const noteText = (activeSong.note ?? "").trim();
     const n = safeSelectedIndex + 1;
 
-    if (!noteText) return `SONG #${n} NOTE`;
+    if (!noteText) return `SONG #${n}`;
 
     const matches: number[] = [];
     for (let i = 0; i < songs.length; i++) {
@@ -1220,11 +1246,11 @@ export default function MixlistPage() {
       if (t && t === noteText) matches.push(i + 1);
     }
 
-    if (matches.length <= 1) return `SONG #${n} NOTE`;
+    if (matches.length <= 1) return `SONG #${n}`;
 
     const min = Math.min(...matches);
     const max = Math.max(...matches);
-    return `SONGS #${min}-#${max} NOTE`;
+    return `SONGS #${min}-#${max}`;
   }, [activeSong, safeSelectedIndex, songs]);
 
   useEffect(() => {
@@ -1250,7 +1276,7 @@ export default function MixlistPage() {
           Reveal this song to see the note.
         </p>
       ) : (activeSong.note ?? "").trim().length > 0 ? (
-        <p className="gv_accent mt-3 whitespace-pre-wrap text-sm">
+        <p className="mt-3 whitespace-pre-wrap text-sm text-[#33293b] dark:text-gv_accent">
           {activeSong.note}
         </p>
       ) : (
@@ -1465,51 +1491,70 @@ export default function MixlistPage() {
       : "That’s everything they wanted you to hear.";
 
   const endOfMixPanel = showEndPanel ? (
-    <section className="mx-auto mt-8 max-w-3xl">
-      <div className="gv_row rounded-3xl border border-purple-500/20 p-6 text-center sm:p-8">
-        <p className="gv_accent whitespace-pre-wrap text-xl leading-8 sm:text-2xl">
-          {endingMessage}
-        </p>
-
-        <p className="mt-2 text-sm text-muted-foreground sm:text-base">
-          What would you like to do now?
-        </p>
-
-        <div className="mx-auto mt-6 max-w-md space-y-3">
+    mixlistId === BETA_CTA_MIXLIST_ID ? (
+      <section className="mx-auto mt-8 max-w-3xl">
+        <div className="gv_row rounded-3xl border border-purple-500/25 p-6 text-center sm:p-8">
           <Link
-            href="/tracklists/new"
-            className={`${purpleActionButton} block text-center`}
+            href="/access"
+            onClick={() =>
+              trackEvent("clicked_beta_cta_from_mixlist", {
+                mixlist_id: mixlistId,
+                source: "mixlist_end_panel",
+              })
+            }
+            className="inline-flex min-w-64 items-center justify-center rounded-full border border-purple-500/50 bg-purple-500/15 px-8 py-4 text-sm font-semibold tracking-[0.18em] text-gv_accent transition hover:-translate-y-0.5 hover:bg-purple-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/40"
           >
-            MAKE A NEW MIXLIST
+            JOIN THE BETA
           </Link>
+        </div>
+      </section>
+    ) : (
+      <section className="mx-auto mt-8 max-w-3xl">
+        <div className="gv_row rounded-3xl border border-purple-500/20 p-6 text-center sm:p-8">
+          <p className="gv_accent whitespace-pre-wrap text-xl leading-8 sm:text-2xl">
+            {endingMessage}
+          </p>
 
-          <button
-            type="button"
-            onClick={handleListenAgain}
-            className={purpleActionButton}
-          >
-            LISTEN TO IT AGAIN
-          </button>
+          <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+            What would you like to do now?
+          </p>
 
-          <div className="relative">
+          <div className="mx-auto mt-6 max-w-md space-y-3">
+            <Link
+              href="/tracklists/new"
+              className={`${purpleActionButton} block text-center`}
+            >
+              MAKE A NEW MIXLIST
+            </Link>
+
             <button
               type="button"
-              onClick={() => setEndExportMenuOpen((open) => !open)}
+              onClick={handleListenAgain}
               className={purpleActionButton}
             >
-              EXPORT MIXLIST
+              LISTEN TO IT AGAIN
             </button>
 
-            {endExportMenuOpen
-              ? renderExportOptions(
-                  () => setEndExportMenuOpen(false),
-                  "up",
-                )
-              : null}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setEndExportMenuOpen((open) => !open)}
+                className={purpleActionButton}
+              >
+                EXPORT MIXLIST
+              </button>
+
+              {endExportMenuOpen
+                ? renderExportOptions(
+                    () => setEndExportMenuOpen(false),
+                    "up",
+                  )
+                : null}
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+    )
   ) : null;
 
   if (loading) {
@@ -1594,26 +1639,6 @@ export default function MixlistPage() {
               message="The creator didn't include any songs."
             />
           </div>
-        ) : null}
-
-        {activeSong && !showFirstSongIntro ? (
-          <section className="gv_row mt-8 rounded-3xl border border-border px-5 py-5 sm:px-7">
-            <p className="text-xs tracking-[0.2em] text-muted-foreground">
-              SONG #{safeSelectedIndex + 1}
-            </p>
-            <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
-              <h2 className="gv_accent text-2xl font-semibold leading-tight sm:text-3xl">
-                {activeIsHidden
-                  ? `Song ${safeSelectedIndex + 1}`
-                  : activeSong.title}
-              </h2>
-              {!activeIsHidden ? (
-                <p className="text-sm italic text-muted-foreground sm:text-base">
-                  {activeSong.artist}
-                </p>
-              ) : null}
-            </div>
-          </section>
         ) : null}
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] xl:items-start">

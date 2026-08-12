@@ -38,7 +38,6 @@ export default function TrackView({
   isRevealed,
   showNotes,
   notes,
-  onReveal,
   disabledReason,
   onPrev,
   onNext,
@@ -48,11 +47,6 @@ export default function TrackView({
   disabledNext = false,
   autoplay = false,
 }: TrackViewProps) {
-  const displayTitle = isRevealed ? track.title : "Hidden song";
-  const displayArtist = isRevealed
-    ? track.artist
-    : "Reveal to view details";
-
   return (
     <section
       className="relative overflow-hidden rounded-3xl border border-border bg-card/70 p-5 backdrop-blur-md sm:p-6"
@@ -67,31 +61,6 @@ export default function TrackView({
         animate="animate"
         variants={{ animate: { transition: { staggerChildren: 0.08 } } }}
       >
-        <motion.div
-          className="flex items-start justify-between gap-3"
-          variants={itemVariants}
-        >
-          <div>
-            <p className="text-[10px] tracking-[0.2em] text-gv_accent">
-              NOW PLAYING
-            </p>
-            <h2 className="mt-2 text-xl font-semibold tracking-tight text-gv_accent sm:text-2xl">
-              {displayTitle}
-            </h2>
-            <p className="mt-1 text-sm text-gv_accent">{displayArtist}</p>
-          </div>
-
-          {!isRevealed && onReveal ? (
-            <button
-              type="button"
-              onClick={onReveal}
-              className="rounded-full border border-border bg-muted px-3 py-1 text-xs tracking-wider text-foreground transition hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-            >
-              REVEAL
-            </button>
-          ) : null}
-        </motion.div>
-
         <motion.div variants={itemVariants}>
           <div className="flex flex-wrap items-center gap-2">
             <button

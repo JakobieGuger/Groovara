@@ -131,6 +131,19 @@ const updateTracklistMetadataSchema = z.object({
     },
     z.string().max(1000).nullable()
   ),
+  finishing_note: z.preprocess(
+    (value) => {
+      if (typeof value !== "string") return value;
+      const normalized = normalizeUserText(value);
+      return normalized.trim() === "" ? null : normalized;
+    },
+    z.string()
+      .max(
+        LIMITS.finishingNote,
+        `Finishing note is too long. Maximum is ${LIMITS.finishingNote.toLocaleString()} characters.`
+      )
+      .nullable()
+  ),
 });
 
 const trackSongSchema = z.object({
@@ -336,7 +349,7 @@ export async function updateTracklistMetadataAction(rawInput: unknown): Promise<
     return validationFailure(parsed.error);
   }
 
-  const { tracklistId, title, description } = parsed.data;
+  const { tracklistId, title, description, finishing_note } = parsed.data;
   const { supabase, user, error: authError } = await getAuthedUser();
 
   if (authError || !user) {
@@ -353,7 +366,7 @@ export async function updateTracklistMetadataAction(rawInput: unknown): Promise<
 
   const { error } = await supabase
     .from("tracklists")
-    .update({ title, description })
+    .update({ title, description, finishing_note })
     .eq("id", tracklistId);
 
   if (error) {
