@@ -203,7 +203,7 @@ export default function EmbeddedPlayer({
   const youtubeId = extractYouTubeId(url);
   if (youtubeId) {
     const embedTitle = [title, artist].filter(Boolean).join(" - ") || "YouTube player";
-    const src = `https://www.youtube.com/embed/${youtubeId}?autoplay=${autoplay ? 1 : 0}&rel=0`;
+    const src = `https://www.youtube.com/embed/${youtubeId}?autoplay=${autoplay ? 1 : 0}&rel=0&playsinline=1`;
 
     return (
       <div className="rounded-2xl border border-border bg-muted/80 p-3">

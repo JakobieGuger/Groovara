@@ -45,16 +45,26 @@ function pickWords(seed: number, title: string, artist: string): string[] {
 
 export function createTheme(seed: string, title: string, artist: string): UiTrackTheme {
   const h = hashSeed(seed);
-  const hue = h % 360;
-  const accentHue = (hue + 44 + (h % 40)) % 360;
-  const glowHue = (hue + 188 + (h % 55)) % 360;
   const intensity = 0.35 + ((h % 50) / 100);
 
+  // Keep the player atmospheric, but make Plum the dominant brand accent.
+  // Blue-Green and Brick appear occasionally; Sage is deliberately rare.
+  const scenePalettes = [
+    { accent: "#5B4B6E", glow: "#657681" },
+    { accent: "#5B4B6E", glow: "#C8BCA2" },
+    { accent: "#5B4B6E", glow: "#657681" },
+    { accent: "#657681", glow: "#5B4B6E" },
+    { accent: "#5B4B6E", glow: "#85866A" },
+    { accent: "#A83B2C", glow: "#5B4B6E" },
+  ] as const;
+
+  const palette = scenePalettes[h % scenePalettes.length];
+
   return {
-    backgroundColor: `hsl(${hue} 30% 10%)`,
-    textColor: `hsl(${(hue + 8) % 360} 20% 88%)`,
-    accentColor: `hsl(${accentHue} 76% 62%)`,
-    glowColor: `hsl(${glowHue} 68% 56%)`,
+    backgroundColor: h % 3 === 0 ? "#292923" : "#1B1B19",
+    textColor: "#F4EDDD",
+    accentColor: palette.accent,
+    glowColor: palette.glow,
     words: pickWords(h, title, artist),
     intensity,
   };

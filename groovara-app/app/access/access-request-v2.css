@@ -6,11 +6,11 @@
 
 .access-request-v2 {
   --request-ink: #4e4b68;
-  --request-paper: #f7f2e8;
-  --request-panel: rgba(250, 247, 238, 0.9);
-  --request-line: rgba(188, 176, 154, 0.58);
-  --request-purple: #5f5d91;
-  --request-purple-deep: #54517f;
+  --request-paper: #F4EDDD;
+  --request-panel: rgba(244, 237, 221, 0.92);
+  --request-line: rgba(200, 188, 162, 0.58);
+  --request-purple: #5B4B6E;
+  --request-purple-deep: #493B59;
   --request-muted: #777165;
   --request-shadow: 0 18px 42px rgba(64, 47, 31, 0.13);
 
@@ -29,12 +29,12 @@
 
 html.dark .access-request-v2 {
   --request-ink: #e6e1ef;
-  --request-paper: #131315;
-  --request-panel: rgba(24, 24, 27, 0.92);
+  --request-paper: #1B1B19;
+  --request-panel: rgba(41, 41, 35, 0.92);
   --request-line: rgba(255, 255, 255, 0.11);
-  --request-purple: #8b88ba;
-  --request-purple-deep: #7773a8;
-  --request-muted: #aaa4b2;
+  --request-purple: #B7A8C6;
+  --request-purple-deep: #A391B5;
+  --request-muted: #C8BCA2;
   --request-shadow: 0 24px 56px rgba(0, 0, 0, 0.36);
 
   background:

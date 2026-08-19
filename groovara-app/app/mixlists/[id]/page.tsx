@@ -45,7 +45,7 @@ type MixlistProgressRow = {
 };
 
 const purpleActionButton =
-  "w-full rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv_accent transition hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-50";
+  "w-full rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest gv-accent transition hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-50";
 
 function getPlatform(url: string): UiTrack["platform"] {
   const value = url.toLowerCase();
@@ -262,6 +262,10 @@ const SHOW_YOUTUBE_EXPORT_DEBUG =
   process.env.NEXT_PUBLIC_SHOW_EXPORT_DEBUG === "true";
 
 const BETA_CTA_MIXLIST_ID = "3a6aea62-569e-499b-9fa5-0c4b4c41107f";
+const BETA_CTA_WITH_CLOSING_NOTE_MIXLIST_IDS = new Set([
+  "50f22227-23a3-41fc-8437-f2b11776c364",
+  "bb61509f-c6ed-4b2f-9f7e-6834a96ccdda",
+]);
 
 function openExternalExportUrl(url: string) {
   const opened = window.open(url, "_blank");
@@ -1264,7 +1268,7 @@ export default function MixlistPage() {
   }, [loading, mix, mixlistId, songs.length]);
 
   const songNoteCard = mix?.include_song_notes ? (
-    <div className="gv_row rounded-2xl border border-border p-5">
+    <div className="gv-row rounded-2xl border border-border p-5">
       <p className="text-xs tracking-[0.22em] text-muted-foreground">
         {noteRangeLabel}
       </p>
@@ -1276,7 +1280,7 @@ export default function MixlistPage() {
           Reveal this song to see the note.
         </p>
       ) : (activeSong.note ?? "").trim().length > 0 ? (
-        <p className="mt-3 whitespace-pre-wrap text-sm text-[#33293b] dark:text-gv_accent">
+        <p className="mt-3 whitespace-pre-wrap text-sm text-[#292923] dark:text-[#F4EDDD]">
           {activeSong.note}
         </p>
       ) : (
@@ -1288,8 +1292,8 @@ export default function MixlistPage() {
   ) : null;
 
   const descriptionBlock = mix?.message ? (
-    <div className="mx-auto mt-5 max-w-5xl text-center xl:text-left">
-      <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+    <div className="mt-5 max-w-5xl text-left">
+      <p className="whitespace-pre-wrap text-base leading-7 text-foreground/80 dark:text-[#C8BCA2]">
         {mix.message}
       </p>
     </div>
@@ -1309,7 +1313,7 @@ export default function MixlistPage() {
   };
 
   const platformSelectorCard = (
-    <div className="gv_row rounded-2xl p-4">
+    <div className="gv-row rounded-2xl p-4">
       <label className="mb-2 block text-xs tracking-[0.22em] text-muted-foreground">
         LISTEN ON
       </label>
@@ -1341,7 +1345,7 @@ export default function MixlistPage() {
   );
 
   const editInStudioCard = (
-    <div className="gv_row rounded-2xl p-4">
+    <div className="gv-row rounded-2xl p-4">
       <button
         type="button"
         onClick={handleEditInStudio}
@@ -1379,7 +1383,7 @@ export default function MixlistPage() {
         className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-foreground transition hover:bg-purple-500/10"
       >
         <span>Spotify</span>
-        <span className="text-xs text-purple-300">Export</span>
+        <span className="text-xs text-[#5B4B6E] dark:text-[#C8BCA2]">Export</span>
       </button>
 
       <button
@@ -1392,7 +1396,7 @@ export default function MixlistPage() {
         className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-foreground transition hover:bg-purple-500/10 disabled:cursor-not-allowed disabled:opacity-60"
       >
         <span>YouTube</span>
-        <span className="text-xs text-purple-300">
+        <span className="text-xs text-[#5B4B6E] dark:text-[#C8BCA2]">
           {youtubePreviewLoading
             ? "Checking..."
             : exportingYouTube
@@ -1415,7 +1419,7 @@ export default function MixlistPage() {
   );
 
   const copyLinkCard = (
-    <div className="gv_row rounded-2xl p-4">
+    <div className="gv-row rounded-2xl p-4">
       <div className="grid grid-cols-2 gap-3">
         <button onClick={handleCopyLink} className={purpleActionButton}>
           COPY LINK
@@ -1493,7 +1497,7 @@ export default function MixlistPage() {
   const endOfMixPanel = showEndPanel ? (
     mixlistId === BETA_CTA_MIXLIST_ID ? (
       <section className="mx-auto mt-8 max-w-3xl">
-        <div className="gv_row rounded-3xl border border-purple-500/25 p-6 text-center sm:p-8">
+        <div className="gv-row rounded-3xl border border-purple-500/25 p-6 text-center sm:p-8">
           <Link
             href="/access"
             onClick={() =>
@@ -1502,7 +1506,28 @@ export default function MixlistPage() {
                 source: "mixlist_end_panel",
               })
             }
-            className="inline-flex min-w-64 items-center justify-center rounded-full border border-purple-500/50 bg-purple-500/15 px-8 py-4 text-sm font-semibold tracking-[0.18em] text-gv_accent transition hover:-translate-y-0.5 hover:bg-purple-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/40"
+            className="inline-flex min-w-64 items-center justify-center rounded-full border border-purple-500/50 bg-purple-500/15 px-8 py-4 text-sm font-semibold tracking-[0.18em] gv-accent transition hover:-translate-y-0.5 hover:bg-purple-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/40"
+          >
+            JOIN THE BETA
+          </Link>
+        </div>
+      </section>
+    ) : BETA_CTA_WITH_CLOSING_NOTE_MIXLIST_IDS.has(mixlistId) ? (
+      <section className="mx-auto mt-8 max-w-3xl">
+        <div className="gv-row rounded-3xl border border-purple-500/25 p-6 text-center sm:p-8">
+          <p className="gv-accent whitespace-pre-wrap text-xl leading-8 sm:text-2xl">
+            {endingMessage}
+          </p>
+
+          <Link
+            href="/access"
+            onClick={() =>
+              trackEvent("clicked_beta_cta_from_mixlist", {
+                mixlist_id: mixlistId,
+                source: "mixlist_end_panel_with_closing_note",
+              })
+            }
+            className="mt-6 inline-flex min-w-64 items-center justify-center rounded-full border border-purple-500/50 bg-purple-500/15 px-8 py-4 text-sm font-semibold tracking-[0.18em] gv-accent transition hover:-translate-y-0.5 hover:bg-purple-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/40"
           >
             JOIN THE BETA
           </Link>
@@ -1510,8 +1535,8 @@ export default function MixlistPage() {
       </section>
     ) : (
       <section className="mx-auto mt-8 max-w-3xl">
-        <div className="gv_row rounded-3xl border border-purple-500/20 p-6 text-center sm:p-8">
-          <p className="gv_accent whitespace-pre-wrap text-xl leading-8 sm:text-2xl">
+        <div className="gv-row rounded-3xl border border-purple-500/20 p-6 text-center sm:p-8">
+          <p className="gv-accent whitespace-pre-wrap text-xl leading-8 sm:text-2xl">
             {endingMessage}
           </p>
 
@@ -1607,8 +1632,8 @@ export default function MixlistPage() {
             ? ambientTrack != null
               ? `radial-gradient(circle at 20% 12%, ${ambientTrack.theme.accentColor}22, transparent 45%),
                  radial-gradient(circle at 80% 84%, ${ambientTrack.theme.glowColor}26, transparent 40%),
-                 #050507`
-              : "#050507"
+                 #1B1B19`
+              : "#1B1B19"
             : undefined,
       }}
     >
@@ -1625,7 +1650,7 @@ export default function MixlistPage() {
           <p className="text-xs tracking-[0.25em] text-muted-foreground">
             MIXLIST
           </p>
-          <h1 className="gv_accent mt-2 text-3xl font-semibold tracking-wide sm:text-4xl">
+          <h1 className="gv-accent mt-2 text-3xl font-semibold tracking-wide sm:text-4xl">
             {mix.title || "Untitled Mixlist"}
           </h1>
           {descriptionBlock}
@@ -1644,11 +1669,11 @@ export default function MixlistPage() {
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] xl:items-start">
           <div>
             {showFirstSongIntro ? (
-              <section className="gv_row flex min-h-[28rem] flex-col items-center justify-center rounded-3xl border border-border px-6 py-12 text-center sm:px-10">
+              <section className="gv-row flex min-h-[28rem] flex-col items-center justify-center rounded-3xl border border-border px-6 py-12 text-center sm:px-10">
                 <p className="text-xs tracking-[0.24em] text-muted-foreground">
                   READY WHEN YOU ARE
                 </p>
-                <h2 className="gv_accent mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
+                <h2 className="gv-accent mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
                   Your first song is waiting.
                 </h2>
                 <p className="mt-4 max-w-lg text-sm leading-7 text-muted-foreground sm:text-base">
@@ -1658,7 +1683,7 @@ export default function MixlistPage() {
                 <button
                   type="button"
                   onClick={handlePrimaryReveal}
-                  className="mt-7 w-full max-w-sm rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest text-gv_accent transition hover:bg-purple-500/20"
+                  className="mt-7 w-full max-w-sm rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest gv-accent transition hover:bg-purple-500/20"
                 >
                   REVEAL FIRST SONG
                 </button>
@@ -1720,7 +1745,7 @@ export default function MixlistPage() {
                 />
               </TrackTransition>
             ) : (
-              <div className="gv_row rounded-3xl p-6 text-sm text-muted-foreground">
+              <div className="gv-row rounded-3xl p-6 text-sm text-muted-foreground">
                 Select a song to begin.
               </div>
             )}
@@ -1736,7 +1761,7 @@ export default function MixlistPage() {
           </aside>
         </div>
 
-        <section className="gv_row mt-8 space-y-2 rounded-3xl p-3">
+        <section className="gv-row mt-8 space-y-2 rounded-3xl p-3">
           {visibleSongs.map((song, index) => {
             const isHidden =
               mix.reveal_mode && clicked[index] !== true;
@@ -1751,9 +1776,9 @@ export default function MixlistPage() {
                     setSelectedIndex(index);
                     revealSongAt(index, "song_list");
                   }}
-                  className="gv_row block w-full rounded-2xl px-4 py-4 text-left transition"
+                  className="gv-row block w-full rounded-2xl px-4 py-4 text-left transition"
                 >
-                  <p className="gv_accent text-sm">
+                  <p className="gv-accent text-sm">
                     Song {index + 1}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -1782,7 +1807,7 @@ export default function MixlistPage() {
                     setSelectedIndex(index);
                   }
                 }}
-                className={`gv_row rounded-2xl border px-4 py-3 transition ${
+                className={`gv-row rounded-2xl border px-4 py-3 transition ${
                   index === safeSelectedIndex
                     ? "ring-1 ring-[color:var(--ring)]"
                     : ""
@@ -1790,7 +1815,7 @@ export default function MixlistPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="gv_accent truncate text-sm">
+                    <p className="gv-accent truncate text-sm">
                       {index + 1}. {song.title}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
@@ -1804,7 +1829,7 @@ export default function MixlistPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(event) => event.stopPropagation()}
-                    className="gv_row gv_accent flex-shrink-0 rounded-lg px-2 py-1 text-[10px] tracking-[0.2em] transition"
+                    className="gv-row gv-accent flex-shrink-0 rounded-lg px-2 py-1 text-[10px] tracking-[0.2em] transition"
                   >
                     OPEN
                   </a>
@@ -1831,17 +1856,17 @@ export default function MixlistPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="youtube-export-preview-title"
-            className="gv_row max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-purple-500/30 bg-background p-5 shadow-2xl sm:p-6"
+            className="gv-row max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-purple-500/30 bg-background p-5 shadow-2xl sm:p-6"
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs tracking-[0.24em] text-purple-300">
+                <p className="text-xs tracking-[0.24em] text-[#5B4B6E] dark:text-[#C8BCA2]">
                   YOUTUBE EXPORT
                 </p>
                 <h2
                   id="youtube-export-preview-title"
-                  className="gv_accent mt-2 text-2xl font-semibold"
+                  className="gv-accent mt-2 text-2xl font-semibold"
                 >
                   {youtubePreview && youtubePreview.matchedCount === 0
                     ? "These songs need your help"
@@ -1868,7 +1893,7 @@ export default function MixlistPage() {
               </div>
             ) : youtubePreviewError && !youtubePreview ? (
               <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
-                <p className="text-sm text-red-200">{youtubePreviewError}</p>
+                <p className="text-sm text-[#A83B2C] dark:text-red-200">{youtubePreviewError}</p>
                 <div className="mt-4 flex gap-3">
                   <button
                     type="button"
@@ -1891,7 +1916,7 @@ export default function MixlistPage() {
                 <div className="rounded-2xl border border-border bg-black/10 p-4 dark:bg-white/5">
                   <p className="text-sm leading-6 text-muted-foreground">
                     Groovara found YouTube versions for{" "}
-                    <span className="gv_accent font-semibold">
+                    <span className="gv-accent font-semibold">
                       {youtubePreview.matchedCount} of {youtubePreview.songCount}
                     </span>{" "}
                     songs.
@@ -1916,7 +1941,7 @@ export default function MixlistPage() {
                 </div>
 
                 {youtubePreviewError ? (
-                  <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+                  <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-[#A83B2C] dark:text-red-200">
                     {youtubePreviewError}
                   </div>
                 ) : null}
@@ -1938,7 +1963,7 @@ export default function MixlistPage() {
                             className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-black/10 px-3 py-3 dark:bg-white/5"
                           >
                             <div className="min-w-0">
-                              <p className="gv_accent truncate text-sm">
+                              <p className="gv-accent truncate text-sm">
                                 {song.position}. {song.title}
                               </p>
                               <p className="truncate text-xs text-muted-foreground">
@@ -1953,7 +1978,7 @@ export default function MixlistPage() {
                               )}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex-shrink-0 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-2 text-[10px] tracking-widest text-gv_accent transition hover:bg-purple-500/20"
+                              className="flex-shrink-0 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-2 text-[10px] tracking-widest gv-accent transition hover:bg-purple-500/20"
                             >
                               SEARCH YOUTUBE
                             </a>
@@ -1972,19 +1997,19 @@ export default function MixlistPage() {
                     <div className="mt-4 space-y-3 text-xs text-muted-foreground">
                       <div className="grid grid-cols-3 gap-2 text-center">
                         <div className="rounded-xl bg-black/10 p-2 dark:bg-white/5">
-                          <p className="gv_accent text-lg font-semibold">
+                          <p className="gv-accent text-lg font-semibold">
                             {youtubePreview.matchedCount}
                           </p>
                           <p>Matched</p>
                         </div>
                         <div className="rounded-xl bg-black/10 p-2 dark:bg-white/5">
-                          <p className="gv_accent text-lg font-semibold">
+                          <p className="gv-accent text-lg font-semibold">
                             {youtubePreview.searchRequiredCount}
                           </p>
                           <p>Need search</p>
                         </div>
                         <div className="rounded-xl bg-black/10 p-2 dark:bg-white/5">
-                          <p className="gv_accent text-lg font-semibold">
+                          <p className="gv-accent text-lg font-semibold">
                             {youtubePreview.unresolvedCount}
                           </p>
                           <p>Unresolved</p>
