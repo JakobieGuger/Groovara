@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import InlineNotice from "../../../lib/InlineNotice";
 import { supabase } from "../../../lib/supabaseClient";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { convertTrackPlatform } from "@/lib/platformConversion";
 import { copyMixlistToStudioAction } from "./actions";
 import {
@@ -46,6 +47,34 @@ type MixlistProgressRow = {
 
 const purpleActionButton =
   "w-full rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3 text-xs tracking-widest gv-accent transition hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-50";
+
+// Shared Mixlists are public. Use a client that never reads or refreshes a
+// browser auth session for the public Mixlist/song payload itself.
+const publicSupabase = createSupabaseClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  },
+);
+
+function isInvalidRefreshTokenError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+
+  const message =
+    "message" in error && typeof error.message === "string"
+      ? error.message.toLowerCase()
+      : "";
+
+  return (
+    message.includes("invalid refresh token") ||
+    message.includes("refresh token not found")
+  );
+}
 
 function getPlatform(url: string): UiTrack["platform"] {
   const value = url.toLowerCase();
@@ -663,12 +692,47 @@ export default function MixlistPage() {
   // Optional user identity for per-user progress.
   // If anonymous, page should still render; progress just won’t persist.
   useEffect(() => {
+    let cancelled = false;
+
     const run = async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (!error && data?.user?.id) setUserId(data.user.id);
-      else setUserId(null);
+      try {
+        const { data, error } = await supabase.auth.getUser();
+
+        if (cancelled) return;
+
+        if (error) {
+          if (isInvalidRefreshTokenError(error)) {
+            try {
+              await supabase.auth.signOut({ scope: "local" });
+            } catch {
+              // The local session is already unusable. Public Mixlists should
+              // still continue anonymously even if cleanup itself fails.
+            }
+          }
+
+          setUserId(null);
+          return;
+        }
+
+        setUserId(data?.user?.id ?? null);
+      } catch (error) {
+        if (isInvalidRefreshTokenError(error)) {
+          try {
+            await supabase.auth.signOut({ scope: "local" });
+          } catch {}
+        }
+
+        if (!cancelled) {
+          setUserId(null);
+        }
+      }
     };
+
     void run();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Opening someone else's Mixlist while signed in adds it to Received.
@@ -744,7 +808,7 @@ export default function MixlistPage() {
       setNotFound(false);
       setProgressLoaded(false);
 
-      const { data: mixData, error: mixErr } = await supabase
+      const { data: mixData, error: mixErr } = await publicSupabase
         .from("mixlists")
         .select(
           "id,title,message,finishing_note,reveal_mode,include_song_notes,owner_user_id",
@@ -769,7 +833,7 @@ export default function MixlistPage() {
 
       setMix(mixData as Mixlist);
 
-      const { data: songData, error: songErr } = await supabase
+      const { data: songData, error: songErr } = await publicSupabase
         .from("mixlist_songs")
         .select("id,position,title,artist,album,url,note,platform,track_id,isrc")
         .eq("mixlist_id", mixlistId)
