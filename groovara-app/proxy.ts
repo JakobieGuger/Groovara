@@ -5,7 +5,7 @@ function isPublicPath(pathname: string) {
   return (
     pathname === "/" ||
     pathname === "/login" ||
-    /^\/mixlists\/[^/]+$/.test(pathname) ||
+    /^\/mixlists\/[^/]+\/?$/.test(pathname) ||
     pathname === "/auth/callback" ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
