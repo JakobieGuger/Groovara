@@ -267,6 +267,12 @@ const BETA_CTA_WITH_CLOSING_NOTE_MIXLIST_IDS = new Set([
   "bb61509f-c6ed-4b2f-9f7e-6834a96ccdda",
 ]);
 
+const PUBLIC_BETA_SHOWCASE_MIXLIST_ID =
+  "bb61509f-c6ed-4b2f-9f7e-6834a96ccdda";
+
+const PUBLIC_BETA_CLOSING_NOTE =
+  "Groovara is still a work in progress, and we're looking for people who love music and would like to help us make it better. We're opening our beta to a small group of people who want to help shape what comes next. If this feels like something you'd like to be part of, click below to raise your hand.\n\nYou're welcome to stick around for another listen, take the songs with you, pass this along to someone who loves music, or come help us build what's next.\n\nWhatever you decide, we're glad you're here.";
+
 function openExternalExportUrl(url: string) {
   const opened = window.open(url, "_blank");
 
@@ -287,6 +293,8 @@ export default function MixlistPage() {
   const router = useRouter();
   const id = params.id;
   const mixlistId = String(id);
+  const isPublicBetaShowcase =
+    mixlistId === PUBLIC_BETA_SHOWCASE_MIXLIST_ID;
 
   const [mix, setMix] = useState<Mixlist | null>(null);
   const [songs, setSongs] = useState<MixSong[]>([]);
@@ -303,7 +311,6 @@ export default function MixlistPage() {
     useState<string | null>(null);
   const [copyingToStudio, setCopyingToStudio] = useState(false);
   const [studioStatus, setStudioStatus] = useState<string | null>(null);
-  const [resetStatus, setResetStatus] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
@@ -1100,12 +1107,6 @@ export default function MixlistPage() {
     activeIsHidden,
   ]);
 
-  const canRevealNext = useMemo(() => {
-    if (!mix) return false;
-    if (!mix.reveal_mode) return false;
-    return revealedSlots < songs.length;
-  }, [mix, revealedSlots, songs.length]);
-
   const revealSongAt = (index: number, source: string) => {
     if (index < 0 || index >= songs.length) return;
     if (clicked[index] === true) return;
@@ -1159,46 +1160,6 @@ export default function MixlistPage() {
     handleRevealNext();
   };
 
-  const handleResetRevelations = async () => {
-    if (!mix?.reveal_mode || songs.length === 0) return;
-
-    if (saveTimerRef.current) {
-      window.clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
-
-    const resetClicked = new Array(songs.length).fill(false);
-    setRevealedSlots(0);
-    setClicked(resetClicked);
-    setSelectedIndex(0);
-    setHasInteracted(false);
-    setResetStatus("Revelations reset.");
-    window.setTimeout(() => setResetStatus(null), 1600);
-
-    if (userId) {
-      const { error } = await supabase.from("mixlist_progress").upsert(
-        {
-          mixlist_id: mixlistId,
-          user_id: userId,
-          revealed_count: 0,
-          clicked_json: resetClicked,
-        },
-        { onConflict: "mixlist_id,user_id" },
-      );
-
-      if (error) {
-        console.error("Failed to persist revelation reset", error);
-        setResetStatus("Reset locally, but progress could not be saved.");
-      }
-    }
-
-    trackEvent("reset_revelations", {
-      mixlist_id: mixlistId,
-      previous_revealed_count: clicked.filter(Boolean).length,
-      total_songs: songs.length,
-    });
-  };
-
   const handleListenAgain = () => {
     if (songs.length === 0) return;
 
@@ -1213,8 +1174,6 @@ export default function MixlistPage() {
       setClicked(new Array(songs.length).fill(false));
     }
 
-    setResetStatus("Back at the beginning.");
-    window.setTimeout(() => setResetStatus(null), 1600);
     window.scrollTo({ top: 0, behavior: "smooth" });
 
     trackEvent("restarted_mixlist", {
@@ -1268,7 +1227,7 @@ export default function MixlistPage() {
   }, [loading, mix, mixlistId, songs.length]);
 
   const songNoteCard = mix?.include_song_notes ? (
-    <div className="gv-row rounded-2xl border border-border p-5">
+    <div className="gv-row rounded-2xl border border-border p-5 text-left">
       <p className="text-xs tracking-[0.22em] text-muted-foreground">
         {noteRangeLabel}
       </p>
@@ -1365,10 +1324,10 @@ export default function MixlistPage() {
 
   const renderExportOptions = (
     closeMenu: () => void,
-    placement: "up" | "down" = "down",
+    placement: "up" | "down" = "up",
   ) => (
     <div
-      className={`absolute right-0 z-30 w-56 overflow-hidden rounded-2xl border border-border bg-background/95 p-2 shadow-xl backdrop-blur ${
+      className={`absolute right-0 z-[500] w-56 overflow-hidden rounded-2xl border border-border bg-background/95 p-2 shadow-2xl backdrop-blur ${
         placement === "up"
           ? "bottom-full mb-2"
           : "top-full mt-2"
@@ -1418,27 +1377,41 @@ export default function MixlistPage() {
     </div>
   );
 
-  const copyLinkCard = (
-    <div className="gv-row rounded-2xl p-4">
-      <div className="grid grid-cols-2 gap-3">
-        <button onClick={handleCopyLink} className={purpleActionButton}>
-          COPY LINK
+  const exportSelectorCard = (
+    <div className="gv-row relative z-[200] overflow-visible rounded-2xl p-4">
+      <label className="mb-2 block text-xs tracking-[0.22em] text-muted-foreground">
+        EXPORT TO
+      </label>
+
+      <div className="relative z-[300] overflow-visible">
+        <button
+          type="button"
+          onClick={() => setExportMenuOpen((open) => !open)}
+          className="flex w-full items-center justify-between rounded-full border border-purple-500/40 bg-black/70 px-4 py-3 text-left text-sm text-white outline-none transition hover:bg-black/80"
+          aria-haspopup="menu"
+          aria-expanded={exportMenuOpen}
+        >
+          <span>Choose platform</span>
+          <span aria-hidden="true" className="text-xs text-white/70">
+            ▾
+          </span>
         </button>
 
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setExportMenuOpen((open) => !open)}
-            className={purpleActionButton}
-          >
-            EXPORT
-          </button>
-
-          {exportMenuOpen
-            ? renderExportOptions(() => setExportMenuOpen(false))
-            : null}
-        </div>
+        {exportMenuOpen
+          ? renderExportOptions(
+              () => setExportMenuOpen(false),
+              "down",
+            )
+          : null}
       </div>
+    </div>
+  );
+
+  const copyLinkCard = (
+    <div className="gv-row rounded-2xl p-4">
+      <button onClick={handleCopyLink} className={purpleActionButton}>
+        COPY LINK
+      </button>
 
       {copyStatus ? (
         <p className="mt-2 text-center text-xs tracking-widest text-muted-foreground">
@@ -1448,89 +1421,169 @@ export default function MixlistPage() {
     </div>
   );
 
-  const revealOrBackButton =
-    mix?.reveal_mode &&
-    songs.length > 0 &&
-    (clicked[0] !== true || revealedSlots < songs.length) ? (
-      <button
-        onClick={handlePrimaryReveal}
-        disabled={clicked[0] === true && !canRevealNext}
-        className={purpleActionButton}
-      >
-        {clicked[0] !== true ? "REVEAL FIRST" : "REVEAL NEXT"}
-      </button>
-    ) : (
-      <Link
-        href="/mixlists"
-        className={`${purpleActionButton} block text-center`}
-      >
-        BACK TO MIXLISTS
-      </Link>
-    );
-
-  const resetRevelationsButton =
-    mix?.reveal_mode &&
-    songs.length > 0 &&
-    (revealedSlots > 0 || clicked.some(Boolean)) ? (
-      <div className="space-y-2">
-        <button
-          type="button"
-          onClick={handleResetRevelations}
-          className={purpleActionButton}
-        >
-          RESET
-        </button>
-
-        {resetStatus ? (
-          <p className="text-center text-xs tracking-widest text-muted-foreground">
-            {resetStatus}
-          </p>
-        ) : null}
-      </div>
-    ) : null;
-
-  const endingMessage =
-    showFinishingNote && mix?.finishing_note
+  const endingMessage = isPublicBetaShowcase
+    ? PUBLIC_BETA_CLOSING_NOTE
+    : showFinishingNote && mix?.finishing_note
       ? mix.finishing_note
       : "That’s everything they wanted you to hear.";
 
   const endOfMixPanel = showEndPanel ? (
-    mixlistId === BETA_CTA_MIXLIST_ID ? (
+    isPublicBetaShowcase ? (
+      <section className="mx-auto mt-8 max-w-4xl">
+        <div className="gv-row rounded-3xl border border-purple-500/25 p-6 sm:p-7">
+          <p className="whitespace-pre-wrap text-left text-base leading-7 text-foreground/90 sm:text-lg sm:leading-8">
+            {PUBLIC_BETA_CLOSING_NOTE}
+          </p>
+
+          <div className="mt-6">
+            <Link
+              href="/access"
+              onClick={() =>
+                trackEvent("clicked_beta_cta_from_mixlist", {
+                  mixlist_id: mixlistId,
+                  source: "public_beta_showcase_end_panel",
+                })
+              }
+              className="inline-flex w-full items-center justify-center rounded-full border border-[#5B4B6E] bg-[#5B4B6E] px-8 py-4 text-sm font-semibold tracking-[0.18em] text-[#F4EDDD] transition hover:-translate-y-0.5 hover:bg-[#493B59] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5B4B6E]/40 dark:border-[#C8BCA2]/35"
+            >
+              JOIN THE BETA
+            </Link>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <button
+                type="button"
+                onClick={handleListenAgain}
+                className={purpleActionButton}
+              >
+                LISTEN AGAIN
+              </button>
+
+              <div className="relative z-50">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEndExportMenuOpen((open) => !open)
+                  }
+                  className={purpleActionButton}
+                >
+                  EXPORT
+                </button>
+
+                {endExportMenuOpen
+                  ? renderExportOptions(
+                      () => setEndExportMenuOpen(false),
+                      "up",
+                    )
+                  : null}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className={purpleActionButton}
+              >
+                COPY LINK
+              </button>
+            </div>
+
+            {copyStatus ? (
+              <p className="mt-3 text-center text-xs tracking-widest text-muted-foreground">
+                {copyStatus}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </section>
+    ) : mixlistId === BETA_CTA_MIXLIST_ID ? (
       <section className="mx-auto mt-8 max-w-3xl">
         <div className="gv-row rounded-3xl border border-purple-500/25 p-6 text-center sm:p-8">
-          <Link
-            href="/access"
-            onClick={() =>
-              trackEvent("clicked_beta_cta_from_mixlist", {
-                mixlist_id: mixlistId,
-                source: "mixlist_end_panel",
-              })
-            }
-            className="inline-flex min-w-64 items-center justify-center rounded-full border border-purple-500/50 bg-purple-500/15 px-8 py-4 text-sm font-semibold tracking-[0.18em] gv-accent transition hover:-translate-y-0.5 hover:bg-purple-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/40"
-          >
-            JOIN THE BETA
-          </Link>
+          <div className="mx-auto max-w-md space-y-3">
+            <Link
+              href="/access"
+              onClick={() =>
+                trackEvent("clicked_beta_cta_from_mixlist", {
+                  mixlist_id: mixlistId,
+                  source: "mixlist_end_panel",
+                })
+              }
+              className="inline-flex w-full items-center justify-center rounded-full border border-purple-500/50 bg-purple-500/15 px-8 py-4 text-sm font-semibold tracking-[0.18em] gv-accent transition hover:-translate-y-0.5 hover:bg-purple-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/40"
+            >
+              JOIN THE BETA
+            </Link>
+
+            <button
+              type="button"
+              onClick={handleListenAgain}
+              className={purpleActionButton}
+            >
+              LISTEN TO IT AGAIN
+            </button>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setEndExportMenuOpen((open) => !open)}
+                className={purpleActionButton}
+              >
+                EXPORT MIXLIST
+              </button>
+
+              {endExportMenuOpen
+                ? renderExportOptions(
+                    () => setEndExportMenuOpen(false),
+                    "up",
+                  )
+                : null}
+            </div>
+          </div>
         </div>
       </section>
     ) : BETA_CTA_WITH_CLOSING_NOTE_MIXLIST_IDS.has(mixlistId) ? (
       <section className="mx-auto mt-8 max-w-3xl">
-        <div className="gv-row rounded-3xl border border-purple-500/25 p-6 text-center sm:p-8">
-          <p className="gv-accent whitespace-pre-wrap text-xl leading-8 sm:text-2xl">
+        <div className="gv-row rounded-3xl border border-purple-500/25 p-6 sm:p-8">
+          <p className="gv-accent whitespace-pre-wrap text-left text-xl leading-8 sm:text-2xl">
             {endingMessage}
           </p>
 
-          <Link
-            href="/access"
-            onClick={() =>
-              trackEvent("clicked_beta_cta_from_mixlist", {
-                mixlist_id: mixlistId,
-                source: "mixlist_end_panel_with_closing_note",
-              })
-            }
-            className="mt-6 inline-flex min-w-64 items-center justify-center rounded-full border border-purple-500/50 bg-purple-500/15 px-8 py-4 text-sm font-semibold tracking-[0.18em] gv-accent transition hover:-translate-y-0.5 hover:bg-purple-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/40"
-          >
-            JOIN THE BETA
-          </Link>
+          <div className="mx-auto mt-6 max-w-md space-y-3 text-center">
+            <Link
+              href="/access"
+              onClick={() =>
+                trackEvent("clicked_beta_cta_from_mixlist", {
+                  mixlist_id: mixlistId,
+                  source: "mixlist_end_panel_with_closing_note",
+                })
+              }
+              className="inline-flex w-full items-center justify-center rounded-full border border-purple-500/50 bg-purple-500/15 px-8 py-4 text-sm font-semibold tracking-[0.18em] gv-accent transition hover:-translate-y-0.5 hover:bg-purple-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/40"
+            >
+              JOIN THE BETA
+            </Link>
+
+            <button
+              type="button"
+              onClick={handleListenAgain}
+              className={purpleActionButton}
+            >
+              LISTEN TO IT AGAIN
+            </button>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setEndExportMenuOpen((open) => !open)}
+                className={purpleActionButton}
+              >
+                EXPORT MIXLIST
+              </button>
+
+              {endExportMenuOpen
+                ? renderExportOptions(
+                    () => setEndExportMenuOpen(false),
+                    "up",
+                  )
+                : null}
+            </div>
+          </div>
         </div>
       </section>
     ) : (
@@ -1646,7 +1699,7 @@ export default function MixlistPage() {
       </div>
 
       <div className="relative z-10 mx-auto max-w-7xl">
-        <header className="text-center xl:text-left">
+        <header className="mx-auto max-w-5xl text-left">
           <p className="text-xs tracking-[0.25em] text-muted-foreground">
             MIXLIST
           </p>
@@ -1666,7 +1719,7 @@ export default function MixlistPage() {
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] xl:items-start">
+        <div className="mx-auto mt-6 grid max-w-5xl gap-4">
           <div>
             {showFirstSongIntro ? (
               <section className="gv-row flex min-h-[28rem] flex-col items-center justify-center rounded-3xl border border-border px-6 py-12 text-center sm:px-10">
@@ -1751,17 +1804,28 @@ export default function MixlistPage() {
             )}
           </div>
 
-          <aside className="space-y-4 xl:sticky xl:top-8">
-            {platformSelectorCard}
-            {copyLinkCard}
+          <aside className="space-y-4">
             {songNoteCard}
-            {revealOrBackButton}
-            {resetRevelationsButton}
-            {editInStudioCard}
+
+            {isPublicBetaShowcase ? (
+              platformSelectorCard
+            ) : (
+              <>
+                <div className="relative z-[150] grid gap-4 overflow-visible sm:grid-cols-2">
+                  {platformSelectorCard}
+                  {exportSelectorCard}
+                </div>
+
+                <div className="relative z-0 grid gap-4 sm:grid-cols-2">
+                  {copyLinkCard}
+                  {editInStudioCard}
+                </div>
+              </>
+            )}
           </aside>
         </div>
 
-        <section className="gv-row mt-8 space-y-2 rounded-3xl p-3">
+        <section className="gv-row mx-auto mt-8 max-w-5xl space-y-2 rounded-3xl p-3">
           {visibleSongs.map((song, index) => {
             const isHidden =
               mix.reveal_mode && clicked[index] !== true;
