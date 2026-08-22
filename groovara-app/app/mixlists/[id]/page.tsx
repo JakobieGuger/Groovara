@@ -1488,7 +1488,7 @@ export default function MixlistPage() {
           </p>
         ) : showFinishingNote ? (
           <p className="whitespace-pre-wrap text-left text-base leading-7 text-foreground/90 sm:text-lg sm:leading-8">
-            {mix.finishing_note}
+            {mix?.finishing_note}
           </p>
         ) : null}
 
