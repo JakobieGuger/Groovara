@@ -22,8 +22,15 @@ type Mixlist = {
   title: string | null;
   message: string | null;
   finishing_note: string | null;
+  recipient_name: string | null;
+  sender_name: string | null;
+  created_at: string;
+  show_recipient: boolean;
+  show_sender: boolean;
+  show_date: boolean;
   reveal_mode: boolean;
   include_song_notes: boolean;
+  allow_copy_to_studio: boolean;
   owner_user_id: string;
 };
 
@@ -74,6 +81,19 @@ function isInvalidRefreshTokenError(error: unknown) {
     message.includes("invalid refresh token") ||
     message.includes("refresh token not found")
   );
+}
+
+function formatMixDate(value: string | null) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+
+  return date.toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function getPlatform(url: string): UiTrack["platform"] {
@@ -394,7 +414,7 @@ export default function MixlistPage() {
     }
   };
 
-  const handleEditInStudio = async () => {
+  const handleCopyToStudio = async () => {
     if (copyingToStudio) return;
 
     setCopyingToStudio(true);
@@ -802,13 +822,45 @@ export default function MixlistPage() {
       setNotFound(false);
       setProgressLoaded(false);
 
-      const { data: mixData, error: mixErr } = await publicSupabase
+      const mixSelect =
+        "id,title,message,finishing_note,recipient_name,sender_name,created_at,show_recipient,show_sender,show_date,reveal_mode,include_song_notes,allow_copy_to_studio,owner_user_id";
+
+      let { data: mixData, error: mixErr } = await publicSupabase
         .from("mixlists")
-        .select(
-          "id,title,message,finishing_note,reveal_mode,include_song_notes,owner_user_id",
-        )
+        .select(mixSelect)
         .eq("id", mixlistId)
         .maybeSingle();
+
+      let loadedWithAuthenticatedClient = false;
+
+      // Non-public Mixlists are intentionally hidden from the anonymous client.
+      // If this browser is signed in, retry with its authenticated session so
+      // the owner can still open their own private Mixlist under RLS.
+      if (!mixData && !mixErr) {
+        try {
+          const { data: authData, error: authError } = await supabase.auth.getUser();
+
+          if (!authError && authData.user) {
+            const authenticatedResult = await supabase
+              .from("mixlists")
+              .select(mixSelect)
+              .eq("id", mixlistId)
+              .maybeSingle();
+
+            if (authenticatedResult.data) {
+              mixData = authenticatedResult.data;
+              mixErr = authenticatedResult.error;
+              loadedWithAuthenticatedClient = true;
+            } else if (authenticatedResult.error) {
+              mixErr = authenticatedResult.error;
+            }
+          }
+        } catch (error) {
+          if (!isInvalidRefreshTokenError(error)) {
+            console.error("authenticated private Mixlist fallback failed", error);
+          }
+        }
+      }
 
       if (cancelled) return;
 
@@ -827,7 +879,11 @@ export default function MixlistPage() {
 
       setMix(mixData as Mixlist);
 
-      const { data: songData, error: songErr } = await publicSupabase
+      const songQueryClient = loadedWithAuthenticatedClient
+        ? supabase
+        : publicSupabase;
+
+      const { data: songData, error: songErr } = await songQueryClient
         .from("mixlist_songs")
         .select("id,position,title,artist,album,url,note,platform,track_id,isrc")
         .eq("mixlist_id", mixlistId)
@@ -1253,6 +1309,8 @@ export default function MixlistPage() {
   const showFinishingNote =
     showEndPanel && Boolean((mix?.finishing_note ?? "").trim());
 
+  const canCopyToStudio = Boolean(mix?.allow_copy_to_studio);
+
   const noteRangeLabel = useMemo(() => {
     if (!activeSong) return "SONG";
 
@@ -1361,15 +1419,15 @@ export default function MixlistPage() {
     </div>
   );
 
-  const editInStudioCard = (
+  const copyToStudioCard = (
     <div className="gv-row rounded-2xl p-4">
       <button
         type="button"
-        onClick={handleEditInStudio}
+        onClick={handleCopyToStudio}
         disabled={copyingToStudio}
         className={purpleActionButton}
       >
-        {copyingToStudio ? "COPYING TO STUDIO..." : "EDIT IN STUDIO"}
+        {copyingToStudio ? "COPYING TO STUDIO..." : "COPY TO STUDIO"}
       </button>
 
       {studioStatus ? (
@@ -1632,10 +1690,31 @@ export default function MixlistPage() {
 
       <div className="relative z-10 mx-auto max-w-7xl">
         <header className="mx-auto max-w-5xl text-left">
-          <p className="text-xs tracking-[0.25em] text-muted-foreground">
-            MIXLIST
-          </p>
-          <h1 className="gv-accent mt-2 text-3xl font-semibold tracking-wide sm:text-4xl">
+          {(mix.show_recipient && mix.recipient_name?.trim()) ||
+          (mix.show_sender && mix.sender_name?.trim()) ||
+          (mix.show_date && mix.created_at) ? (
+            <div className="mb-8 text-center text-lg leading-7 text-muted-foreground sm:text-xl sm:leading-8">
+              {mix.show_recipient && mix.recipient_name?.trim() ? (
+                <p>
+                  <span className="font-semibold text-foreground">Mixlist for </span>
+                  {mix.recipient_name.trim()}
+                </p>
+              ) : null}
+
+              {mix.show_sender && mix.sender_name?.trim() ? (
+                <p>
+                  <span className="font-semibold text-foreground">From </span>
+                  {mix.sender_name.trim()}
+                </p>
+              ) : null}
+
+              {mix.show_date && mix.created_at ? (
+                <p>{formatMixDate(mix.created_at)}</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <h1 className="gv-accent text-3xl font-semibold tracking-wide sm:text-4xl">
             {mix.title || "Untitled Mixlist"}
           </h1>
           {descriptionBlock}
@@ -1748,9 +1827,13 @@ export default function MixlistPage() {
                   {exportSelectorCard}
                 </div>
 
-                <div className="relative z-0 grid gap-4 sm:grid-cols-2">
+                <div
+                  className={`relative z-0 grid gap-4 ${
+                    canCopyToStudio ? "sm:grid-cols-2" : ""
+                  }`}
+                >
                   {copyLinkCard}
-                  {editInStudioCard}
+                  {canCopyToStudio ? copyToStudioCard : null}
                 </div>
               </>
             )}

@@ -233,6 +233,8 @@ export async function createMixlistFromTracklistAction(
   const input: CreateMixlistFromTracklistInput = parsed.data;
   const normalizedMessage = normalizeUserText(input.message ?? "");
   const normalizedFinishingNote = normalizeUserText(input.finishing_note ?? "");
+  const normalizedRecipient = normalizeUserText(input.recipient_name ?? "");
+  const normalizedSender = normalizeUserText(input.sender_name ?? "");
   const { supabase, user, error: authError } = await getAuthedUser();
 
   if (authError || !user) {
@@ -283,7 +285,14 @@ export async function createMixlistFromTracklistAction(
       is_public: input.is_public,
       finishing_note:
         normalizedFinishingNote.trim() === "" ? null : normalizedFinishingNote,
+      recipient_name:
+        normalizedRecipient.trim() === "" ? null : normalizedRecipient,
+      sender_name: normalizedSender.trim() === "" ? null : normalizedSender,
+      show_recipient: input.show_recipient,
+      show_sender: input.show_sender,
+      show_date: input.show_date,
       include_song_notes: input.include_song_notes,
+      allow_copy_to_studio: input.allow_copy_to_studio,
     })
     .select("id")
     .single();
@@ -305,6 +314,10 @@ export async function createMixlistFromTracklistAction(
     metadata: {
       sourceTracklistId: input.source_tracklist_id,
       songCount: input.songs.length,
+      showRecipient: input.show_recipient,
+      showSender: input.show_sender,
+      showDate: input.show_date,
+      allowCopyToStudio: input.allow_copy_to_studio,
       source: "app/tracklists/[id]/actions.ts",
     },
   });

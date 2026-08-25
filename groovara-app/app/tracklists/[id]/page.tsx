@@ -56,6 +56,7 @@ const PLATFORM_ICONS: Record<string, string> = {
   apple: "/icons/apple24.png",
 };
 
+
 function getActionError(result: {
   type: string;
   message?: string;
@@ -226,6 +227,12 @@ export default function TracklistDetailPage() {
   const [mixFinish, setMixFinish] = useState("");
   const [mixIsPublic, setMixIsPublic] = useState(true);
   const [includeSongNotes, setIncludeSongNotes] = useState(true);
+  const [mixRecipient, setMixRecipient] = useState("");
+  const [mixSender, setMixSender] = useState("");
+  const [showRecipient, setShowRecipient] = useState(false);
+  const [showSender, setShowSender] = useState(false);
+  const [showDate, setShowDate] = useState(true);
+  const [allowCopyToStudio, setAllowCopyToStudio] = useState(true);
 
   const [pageError, setPageError] = useState<string | null>(null);
   const [pageInfo, setPageInfo] = useState<string | null>(null);
@@ -749,9 +756,15 @@ export default function TracklistDetailPage() {
       // but its user-facing source is now the Tracklist description.
       message: description,
       finishing_note: mixFinish,
+      recipient_name: mixRecipient,
+      sender_name: mixSender,
+      show_recipient: showRecipient,
+      show_sender: showSender,
+      show_date: showDate,
       reveal_mode: mixReveal,
       is_public: mixIsPublic,
       include_song_notes: includeSongNotes,
+      allow_copy_to_studio: allowCopyToStudio,
       songs: songs
         .slice()
         .sort((a, b) => a.position - b.position)
@@ -787,6 +800,10 @@ export default function TracklistDetailPage() {
       reveal_mode: mixReveal,
       is_public: mixIsPublic,
       include_song_notes: includeSongNotes,
+      show_recipient: showRecipient,
+      show_sender: showSender,
+      show_date: showDate,
+      allow_copy_to_studio: allowCopyToStudio,
     };
 
     // Keep the original event for existing dashboards, and add the clearer
@@ -1165,6 +1182,35 @@ export default function TracklistDetailPage() {
             </p>
 
 
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs tracking-widest text-gray-400">
+                  RECIPIENT
+                </label>
+                <input
+                  value={mixRecipient}
+                  onChange={(e) => setMixRecipient(e.target.value)}
+                  maxLength={120}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-[#2d2533] outline-none focus:border-purple-500/40 dark:text-gray-100"
+                  placeholder="Recipient name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs tracking-widest text-gray-400">
+                  SENDER
+                </label>
+                <input
+                  value={mixSender}
+                  onChange={(e) => setMixSender(e.target.value)}
+                  maxLength={120}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-[#2d2533] outline-none focus:border-purple-500/40 dark:text-gray-100"
+                  placeholder="Sender name"
+                />
+              </div>
+
+            </div>
+
             <textarea
               value={mixFinish}
               onChange={(e) => setMixFinish(e.target.value)}
@@ -1177,6 +1223,36 @@ export default function TracklistDetailPage() {
             <CharacterCounter value={mixFinish} max={FINISHING_NOTE_LIMIT} />
 
             <label className="mt-4 flex items-center gap-3 text-xs tracking-widest text-gray-400">
+              <input
+                type="checkbox"
+                checked={showRecipient}
+                onChange={(e) => setShowRecipient(e.target.checked)}
+                className="h-4 w-4 accent-purple-500"
+              />
+              SHOW RECIPIENT (&quot;MIXLIST FOR …&quot;)
+            </label>
+
+            <label className="mt-3 flex items-center gap-3 text-xs tracking-widest text-gray-400">
+              <input
+                type="checkbox"
+                checked={showSender}
+                onChange={(e) => setShowSender(e.target.checked)}
+                className="h-4 w-4 accent-purple-500"
+              />
+              SHOW SENDER (&quot;FROM …&quot;)
+            </label>
+
+            <label className="mt-3 flex items-center gap-3 text-xs tracking-widest text-gray-400">
+              <input
+                type="checkbox"
+                checked={showDate}
+                onChange={(e) => setShowDate(e.target.checked)}
+                className="h-4 w-4 accent-purple-500"
+              />
+              SHOW DATE (PUBLISH DATE)
+            </label>
+
+            <label className="mt-3 flex items-center gap-3 text-xs tracking-widest text-gray-400">
               <input
                 type="checkbox"
                 checked={mixReveal}
@@ -1204,6 +1280,17 @@ export default function TracklistDetailPage() {
               />
               PUBLIC (ACCESS BY LINK)
             </label>
+
+            <label className="mt-3 flex items-center gap-2 text-xs tracking-widest text-gray-400">
+              <input
+                type="checkbox"
+                checked={allowCopyToStudio}
+                onChange={(e) => setAllowCopyToStudio(e.target.checked)}
+                className="h-4 w-4 accent-purple-500"
+              />
+              ALLOW RECIPIENT TO COPY TO STUDIO
+            </label>
+
             <button
               onClick={createMixlist}
               disabled={creatingMix}

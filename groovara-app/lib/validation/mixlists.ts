@@ -4,6 +4,7 @@ const MAX = {
   title: 120,
   globalMessage: 2000,
   finishingNote: 2000,
+  displayName: 120,
   songTitle: 300,
   artist: 200,
   album: 200,
@@ -67,6 +68,7 @@ const optionalText = (label: string, max: number) =>
       .nullable()
   );
 
+
 const ALLOWED_HOSTS = new Set([
   "open.spotify.com",
   "spotify.com",
@@ -114,16 +116,40 @@ export const mixlistSongSchema = z.object({
   note: optionalText("Song note", MAX.note),
 });
 
-export const createMixlistFromTracklistSchema = z.object({
-  source_tracklist_id: z.string().uuid("Invalid tracklist id"),
-  title: requiredText("Mixlist title", MAX.title),
-  message: optionalText("Message", MAX.globalMessage),
-  finishing_note: optionalText("Finishing note", MAX.finishingNote),
-  reveal_mode: z.boolean(),
-  is_public: z.boolean(),
-  include_song_notes: z.boolean(),
-  songs: z.array(mixlistSongSchema).min(1, "At least one song is required"),
-});
+export const createMixlistFromTracklistSchema = z
+  .object({
+    source_tracklist_id: z.string().uuid("Invalid tracklist id"),
+    title: requiredText("Mixlist title", MAX.title),
+    message: optionalText("Message", MAX.globalMessage),
+    finishing_note: optionalText("Finishing note", MAX.finishingNote),
+    recipient_name: optionalText("Recipient", MAX.displayName),
+    sender_name: optionalText("Sender", MAX.displayName),
+    show_recipient: z.boolean(),
+    show_sender: z.boolean(),
+    show_date: z.boolean(),
+    reveal_mode: z.boolean(),
+    is_public: z.boolean(),
+    include_song_notes: z.boolean(),
+    allow_copy_to_studio: z.boolean(),
+    songs: z.array(mixlistSongSchema).min(1, "At least one song is required"),
+  })
+  .superRefine((value, ctx) => {
+    if (value.show_recipient && !value.recipient_name) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["recipient_name"],
+        message: "Enter a recipient or turn off Show recipient.",
+      });
+    }
+
+    if (value.show_sender && !value.sender_name) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sender_name"],
+        message: "Enter a sender or turn off Show sender.",
+      });
+    }
+  });
 
 export type CreateMixlistFromTracklistInput = z.infer<
   typeof createMixlistFromTracklistSchema

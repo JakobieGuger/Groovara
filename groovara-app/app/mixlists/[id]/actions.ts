@@ -70,7 +70,7 @@ export async function copyMixlistToStudioAction(
 
   const { data: mixlist, error: mixlistError } = await supabase
     .from("mixlists")
-    .select("id,title,message,finishing_note")
+    .select("id,title,message,finishing_note,owner_user_id,allow_copy_to_studio")
     .eq("id", mixlistId)
     .maybeSingle();
 
@@ -85,6 +85,15 @@ export async function copyMixlistToStudioAction(
     return {
       ok: false,
       message: "This Mixlist could not be found or is no longer available.",
+    };
+  }
+
+  const isOwner = mixlist.owner_user_id === user.id;
+
+  if (!isOwner && !mixlist.allow_copy_to_studio) {
+    return {
+      ok: false,
+      message: "The sender has disabled copying this Mixlist to Studio.",
     };
   }
 
