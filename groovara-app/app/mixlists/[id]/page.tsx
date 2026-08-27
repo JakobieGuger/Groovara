@@ -1312,12 +1312,12 @@ export default function MixlistPage() {
   const canCopyToStudio = Boolean(mix?.allow_copy_to_studio);
 
   const noteRangeLabel = useMemo(() => {
-    if (!activeSong) return "SONG";
+    if (!activeSong) return "NOTE";
 
     const noteText = (activeSong.note ?? "").trim();
     const n = safeSelectedIndex + 1;
 
-    if (!noteText) return `SONG #${n}`;
+    if (!noteText) return `NOTE #${n}`;
 
     const matches: number[] = [];
     for (let i = 0; i < songs.length; i++) {
@@ -1325,11 +1325,11 @@ export default function MixlistPage() {
       if (t && t === noteText) matches.push(i + 1);
     }
 
-    if (matches.length <= 1) return `SONG #${n}`;
+    if (matches.length <= 1) return `NOTE #${n}`;
 
     const min = Math.min(...matches);
     const max = Math.max(...matches);
-    return `SONGS #${min}-#${max}`;
+    return `NOTES #${min}-#${max}`;
   }, [activeSong, safeSelectedIndex, songs]);
 
   useEffect(() => {
@@ -1343,23 +1343,25 @@ export default function MixlistPage() {
   }, [loading, mix, mixlistId, songs.length]);
 
   const songNoteCard = mix?.include_song_notes ? (
-    <div className="gv-row rounded-2xl border border-border p-5 text-left">
-      <p className="text-xs tracking-[0.22em] text-muted-foreground">
+    <div className="rounded-[1.75rem] border border-[#5B4B6E] bg-[#5B4B6E] px-6 py-6 text-left shadow-sm sm:px-8 sm:py-7">
+      <p className="text-sm font-semibold tracking-[0.12em] text-[#F4EDDD] sm:text-base">
         {noteRangeLabel}
       </p>
 
       {!activeSong ? (
-        <p className="mt-3 text-sm text-muted-foreground">No song selected.</p>
+        <p className="mt-4 text-base leading-7 text-[#F4EDDD]/75 sm:text-lg sm:leading-8">
+          No song selected.
+        </p>
       ) : activeIsHidden ? (
-        <p className="mt-3 text-sm text-muted-foreground">
+        <p className="mt-4 text-base leading-7 text-[#F4EDDD]/75 sm:text-lg sm:leading-8">
           Reveal this song to see the note.
         </p>
       ) : (activeSong.note ?? "").trim().length > 0 ? (
-        <p className="mt-3 whitespace-pre-wrap text-sm text-[#292923] dark:text-[#F4EDDD]">
+        <p className="mt-4 whitespace-pre-wrap text-base leading-7 text-[#F4EDDD] sm:text-lg sm:leading-8">
           {activeSong.note}
         </p>
       ) : (
-        <p className="mt-3 text-sm text-muted-foreground">
+        <p className="mt-4 text-base leading-7 text-[#F4EDDD]/75 sm:text-lg sm:leading-8">
           No note for this song.
         </p>
       )}
@@ -1387,34 +1389,37 @@ export default function MixlistPage() {
     setPreferredPlatform(nextPlatform);
   };
 
-  const platformSelectorCard = (
-    <div className="gv-row rounded-2xl p-4">
-      <label className="mb-2 block text-xs tracking-[0.22em] text-muted-foreground">
-        LISTEN ON
-      </label>
+  const playerPlatformSelector = (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-2">
+        <span className="hidden text-[10px] font-medium tracking-[0.18em] text-muted-foreground sm:inline">
+          LISTEN ON
+        </span>
 
-      <select
-        value={preferredPlatform}
-        onChange={(e) =>
-          handlePreferredPlatformChange(e.target.value as Platform)
-        }
-        className="w-full appearance-none rounded-full border border-purple-500/40 bg-black/70 px-4 py-3 text-sm text-white outline-none transition hover:bg-black/80"
-      >
-        <option value="spotify" className="bg-black text-white">
-          Spotify
-        </option>
-        <option value="youtube" className="bg-black text-white">
-          YouTube
-        </option>
-        <option value="apple" className="bg-black text-white">
-          Apple Music
-        </option>
-      </select>
+        <select
+          value={preferredPlatform}
+          onChange={(e) =>
+            handlePreferredPlatformChange(e.target.value as Platform)
+          }
+          aria-label="Listen on platform"
+          className="w-32 appearance-none rounded-xl border border-[#5B4B6E] bg-black/70 px-3 py-2 text-xs text-white outline-none transition hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-[#5B4B6E]/50 sm:w-40"
+        >
+          <option value="spotify" className="bg-black text-white">
+            Spotify
+          </option>
+          <option value="youtube" className="bg-black text-white">
+            YouTube
+          </option>
+          <option value="apple" className="bg-black text-white">
+            Apple Music
+          </option>
+        </select>
+      </div>
 
       {convertingTrack ? (
-        <p className="mt-2 text-xs tracking-widest text-muted-foreground">
-          Converting current track...
-        </p>
+        <span className="text-[10px] tracking-wider text-muted-foreground">
+          Converting...
+        </span>
       ) : null}
     </div>
   );
@@ -1495,22 +1500,15 @@ export default function MixlistPage() {
 
   const exportSelectorCard = (
     <div className="gv-row relative z-[200] overflow-visible rounded-2xl p-4">
-      <label className="mb-2 block text-xs tracking-[0.22em] text-muted-foreground">
-        EXPORT TO
-      </label>
-
       <div className="relative z-[300] overflow-visible">
         <button
           type="button"
           onClick={() => setExportMenuOpen((open) => !open)}
-          className="flex w-full items-center justify-between rounded-full border border-purple-500/40 bg-black/70 px-4 py-3 text-left text-sm text-white outline-none transition hover:bg-black/80"
+          className={purpleActionButton}
           aria-haspopup="menu"
           aria-expanded={exportMenuOpen}
         >
-          <span>Choose platform</span>
-          <span aria-hidden="true" className="text-xs text-white/70">
-            ▾
-          </span>
+          EXPORT
         </button>
 
         {exportMenuOpen
@@ -1806,6 +1804,7 @@ export default function MixlistPage() {
                   nextLabel={mix.reveal_mode ? "REVEAL NEXT" : "NEXT SONG"}
                   disabledPrev={safeSelectedIndex === 0}
                   disabledNext={safeSelectedIndex >= songs.length - 1}
+                  toolbarRight={playerPlatformSelector}
                 />
               </TrackTransition>
             ) : (
@@ -1818,25 +1817,16 @@ export default function MixlistPage() {
           <aside className="space-y-4">
             {songNoteCard}
 
-            {isPublicBetaShowcase ? (
-              platformSelectorCard
-            ) : (
-              <>
-                <div className="relative z-[150] grid gap-4 overflow-visible sm:grid-cols-2">
-                  {platformSelectorCard}
-                  {exportSelectorCard}
-                </div>
+            <div className="relative z-[150] grid gap-4 overflow-visible sm:grid-cols-2">
+              {copyLinkCard}
+              {exportSelectorCard}
+            </div>
 
-                <div
-                  className={`relative z-0 grid gap-4 ${
-                    canCopyToStudio ? "sm:grid-cols-2" : ""
-                  }`}
-                >
-                  {copyLinkCard}
-                  {canCopyToStudio ? copyToStudioCard : null}
-                </div>
-              </>
-            )}
+            {!isPublicBetaShowcase && canCopyToStudio ? (
+              <div className="relative z-0">
+                {copyToStudioCard}
+              </div>
+            ) : null}
           </aside>
         </div>
 

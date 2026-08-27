@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { motion, type Variants } from "framer-motion";
 import EmbeddedPlayer from "./EmbeddedPlayer";
 import ProgressBar from "./ProgressBar";
@@ -21,6 +22,7 @@ type TrackViewProps = {
   disabledPrev?: boolean;
   disabledNext?: boolean;
   autoplay?: boolean;
+  toolbarRight?: ReactNode;
 };
 
 const itemVariants: Variants = {
@@ -46,10 +48,11 @@ export default function TrackView({
   disabledPrev = false,
   disabledNext = false,
   autoplay = false,
+  toolbarRight,
 }: TrackViewProps) {
   return (
     <section
-      className="relative overflow-hidden rounded-3xl border border-border bg-card/70 p-5 backdrop-blur-md sm:p-6"
+      className="relative overflow-hidden rounded-3xl border-2 border-[#5B4B6E] bg-card/70 p-5 backdrop-blur-md sm:p-6"
       style={{
         color: track.theme.textColor,
         backgroundColor: track.theme.backgroundColor,
@@ -62,24 +65,30 @@ export default function TrackView({
         variants={{ animate: { transition: { staggerChildren: 0.08 } } }}
       >
         <motion.div variants={itemVariants}>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={onPrev}
-              disabled={disabledPrev || !onPrev}
-              className="rounded-xl border border-border bg-card/70 px-4 py-2 text-xs tracking-wide text-foreground transition hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-not-allowed disabled:opacity-35"
-            >
-              {prevLabel}
-            </button>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={onPrev}
+                disabled={disabledPrev || !onPrev}
+                className="rounded-xl border border-border bg-card/70 px-4 py-2 text-xs tracking-wide text-foreground transition hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                {prevLabel}
+              </button>
 
-            <button
-              type="button"
-              onClick={onNext}
-              disabled={disabledNext || !onNext}
-              className="rounded-xl border border-border bg-muted px-4 py-2 text-xs tracking-wide text-foreground transition hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-not-allowed disabled:opacity-35"
-            >
-              {nextLabel}
-            </button>
+              <button
+                type="button"
+                onClick={onNext}
+                disabled={disabledNext || !onNext}
+                className="rounded-xl border border-border bg-muted px-4 py-2 text-xs tracking-wide text-foreground transition hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                {nextLabel}
+              </button>
+            </div>
+
+            {toolbarRight ? (
+              <div className="ml-auto min-w-0">{toolbarRight}</div>
+            ) : null}
           </div>
 
           {disabledReason ? (
