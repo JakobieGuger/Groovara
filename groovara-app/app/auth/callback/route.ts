@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { trackServerEvent } from "@/lib/analyticsServer";
 
 const GOOGLE_BETA_COOKIE = "groovara_google_beta_code";
 
@@ -113,10 +114,12 @@ export async function GET(request: NextRequest) {
     return denied;
   }
 
+  const nextUsedCount = codeRow.used_count + 1;
+
   const { error: updateError } = await admin
     .from("beta_codes")
     .update({
-      used_count: codeRow.used_count + 1,
+      used_count: nextUsedCount,
       last_used_at: new Date().toISOString(),
     })
     .eq("id", codeRow.id);
@@ -130,6 +133,15 @@ export async function GET(request: NextRequest) {
     denied.cookies.delete(GOOGLE_BETA_COOKIE);
     return denied;
   }
+
+  // Track only successful, newly-consumed beta codes.
+  await trackServerEvent("beta_code_redeemed", user.id, {
+    beta_code: codeRow.code,
+    beta_code_id: codeRow.id,
+    signup_method: "google",
+    used_count: nextUsedCount,
+    max_uses: codeRow.max_uses,
+  });
 
   response.cookies.delete(GOOGLE_BETA_COOKIE);
   return response;

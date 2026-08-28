@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { trackServerEvent } from "@/lib/analyticsServer";
 
 const POLICY_VERSION = "youtube-compliance-2026-06";
 
@@ -94,7 +95,10 @@ export async function signupAction(
   }
 
   if (!userId) {
-    return { error: "Account was created incorrectly. Please try again.", success: "" };
+    return {
+      error: "Account was created incorrectly. Please try again.",
+      success: "",
+    };
   }
 
   const { error: redemptionError } = await admin
@@ -106,15 +110,18 @@ export async function signupAction(
 
   if (redemptionError) {
     return {
-      error: "Account created, but beta code redemption failed. Please contact support.",
+      error:
+        "Account created, but beta code redemption failed. Please contact support.",
       success: "",
     };
   }
 
+  const nextUsedCount = codeRow.used_count + 1;
+
   const { error: updateError } = await admin
     .from("beta_codes")
     .update({
-      used_count: codeRow.used_count + 1,
+      used_count: nextUsedCount,
       last_used_at: new Date().toISOString(),
     })
     .eq("id", codeRow.id);
@@ -125,6 +132,16 @@ export async function signupAction(
       success: "",
     };
   }
+
+  // Track the code only after redemption and usage count both succeed.
+  // This event represents an actual consumed beta code, not an application.
+  await trackServerEvent("beta_code_redeemed", userId, {
+    beta_code: codeRow.code,
+    beta_code_id: codeRow.id,
+    signup_method: "email_password",
+    used_count: nextUsedCount,
+    max_uses: codeRow.max_uses,
+  });
 
   const { error: acceptanceError } = await admin
     .from("user_policy_acceptances")
