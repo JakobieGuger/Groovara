@@ -1274,6 +1274,31 @@ export default function MixlistPage() {
     handleRevealNext();
   };
 
+  const handlePreviousSong = () => {
+    setHasInteracted(true);
+    setSelectedIndex(Math.max(0, safeSelectedIndex - 1));
+  };
+
+  const handleNextSong = () => {
+    setHasInteracted(true);
+
+    const nextIndex = Math.min(
+      songs.length - 1,
+      safeSelectedIndex + 1,
+    );
+
+    if (nextIndex === safeSelectedIndex) return;
+
+    if (mix?.reveal_mode) {
+      setRevealedSlots((current) =>
+        Math.max(current, nextIndex + 1),
+      );
+      revealSongAt(nextIndex, "player_reveal_next");
+    }
+
+    setSelectedIndex(nextIndex);
+  };
+
   const handleListenAgain = () => {
     if (songs.length === 0) return;
 
@@ -1390,9 +1415,9 @@ export default function MixlistPage() {
   };
 
   const playerPlatformSelector = (
-    <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center gap-2">
-        <span className="hidden text-[10px] font-medium tracking-[0.18em] text-muted-foreground sm:inline">
+    <div className="flex flex-col items-start gap-1">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-xs font-medium tracking-[0.18em] text-muted-foreground">
           LISTEN ON
         </span>
 
@@ -1402,7 +1427,7 @@ export default function MixlistPage() {
             handlePreferredPlatformChange(e.target.value as Platform)
           }
           aria-label="Listen on platform"
-          className="w-32 appearance-none rounded-xl border border-[#5B4B6E] bg-black/70 px-3 py-2 text-xs text-white outline-none transition hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-[#5B4B6E]/50 sm:w-40"
+          className="w-40 appearance-none rounded-xl border border-[#5B4B6E] bg-black/70 px-4 py-2.5 text-sm text-white outline-none transition hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-[#5B4B6E]/50 sm:w-48"
         >
           <option value="spotify" className="bg-black text-white">
             Spotify
@@ -1421,6 +1446,28 @@ export default function MixlistPage() {
           Converting...
         </span>
       ) : null}
+    </div>
+  );
+
+  const songNavigationControls = (
+    <div className="mx-auto grid w-full max-w-2xl grid-cols-2 gap-3 px-2 sm:gap-4">
+      <button
+        type="button"
+        onClick={handlePreviousSong}
+        disabled={safeSelectedIndex === 0}
+        className="rounded-full border-2 border-[#5B4B6E] bg-[#5B4B6E] px-5 py-4 text-[11px] font-semibold tracking-[0.14em] text-[#F4EDDD] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#493B59] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5B4B6E]/40 disabled:cursor-not-allowed disabled:opacity-35 sm:px-8 sm:text-sm"
+      >
+        PREVIOUS SONG
+      </button>
+
+      <button
+        type="button"
+        onClick={handleNextSong}
+        disabled={safeSelectedIndex >= songs.length - 1}
+        className="rounded-full border-2 border-[#5B4B6E] bg-[#5B4B6E] px-5 py-4 text-[11px] font-semibold tracking-[0.14em] text-[#F4EDDD] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#493B59] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5B4B6E]/40 disabled:cursor-not-allowed disabled:opacity-35 sm:px-8 sm:text-sm"
+      >
+        {mix?.reveal_mode ? "REVEAL NEXT" : "NEXT SONG"}
+      </button>
     </div>
   );
 
@@ -1777,33 +1824,6 @@ export default function MixlistPage() {
                   disabledReason={
                     activeIsHidden ? "Reveal this song to play it." : null
                   }
-                  onPrev={() => {
-                    setHasInteracted(true);
-                    setSelectedIndex(Math.max(0, safeSelectedIndex - 1));
-                  }}
-                  onNext={() => {
-                    setHasInteracted(true);
-
-                    const nextIndex = Math.min(
-                      songs.length - 1,
-                      safeSelectedIndex + 1,
-                    );
-
-                    if (nextIndex === safeSelectedIndex) return;
-
-                    if (mix.reveal_mode) {
-                      setRevealedSlots((current) =>
-                        Math.max(current, nextIndex + 1),
-                      );
-                      revealSongAt(nextIndex, "player_reveal_next");
-                    }
-
-                    setSelectedIndex(nextIndex);
-                  }}
-                  prevLabel="PREVIOUS SONG"
-                  nextLabel={mix.reveal_mode ? "REVEAL NEXT" : "NEXT SONG"}
-                  disabledPrev={safeSelectedIndex === 0}
-                  disabledNext={safeSelectedIndex >= songs.length - 1}
                   toolbarRight={playerPlatformSelector}
                 />
               </TrackTransition>
@@ -1816,6 +1836,8 @@ export default function MixlistPage() {
 
           <aside className="space-y-4">
             {songNoteCard}
+
+            {!showFirstSongIntro ? songNavigationControls : null}
 
             <div className="relative z-[150] grid gap-4 overflow-visible sm:grid-cols-2">
               {copyLinkCard}

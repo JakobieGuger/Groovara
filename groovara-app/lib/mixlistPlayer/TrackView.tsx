@@ -15,12 +15,6 @@ type TrackViewProps = {
   onPlay?: () => void;
   onReveal?: () => void;
   disabledReason?: string | null;
-  onPrev?: () => void;
-  onNext?: () => void;
-  prevLabel?: string;
-  nextLabel?: string;
-  disabledPrev?: boolean;
-  disabledNext?: boolean;
   autoplay?: boolean;
   toolbarRight?: ReactNode;
 };
@@ -41,12 +35,6 @@ export default function TrackView({
   showNotes,
   notes,
   disabledReason,
-  onPrev,
-  onNext,
-  prevLabel = "PREVIOUS SONG",
-  nextLabel = "NEXT SONG",
-  disabledPrev = false,
-  disabledNext = false,
   autoplay = false,
   toolbarRight,
 }: TrackViewProps) {
@@ -64,39 +52,19 @@ export default function TrackView({
         animate="animate"
         variants={{ animate: { transition: { staggerChildren: 0.08 } } }}
       >
-        <motion.div variants={itemVariants}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={onPrev}
-                disabled={disabledPrev || !onPrev}
-                className="rounded-xl border border-border bg-card/70 px-4 py-2 text-xs tracking-wide text-foreground transition hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                {prevLabel}
-              </button>
-
-              <button
-                type="button"
-                onClick={onNext}
-                disabled={disabledNext || !onNext}
-                className="rounded-xl border border-border bg-muted px-4 py-2 text-xs tracking-wide text-foreground transition hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                {nextLabel}
-              </button>
-            </div>
-
+        {toolbarRight || disabledReason ? (
+          <motion.div variants={itemVariants}>
             {toolbarRight ? (
-              <div className="ml-auto min-w-0">{toolbarRight}</div>
+              <div className="flex justify-start">{toolbarRight}</div>
             ) : null}
-          </div>
 
-          {disabledReason ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {disabledReason}
-            </p>
-          ) : null}
-        </motion.div>
+            {disabledReason ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {disabledReason}
+              </p>
+            ) : null}
+          </motion.div>
+        ) : null}
 
         <motion.div variants={itemVariants}>
           <ProgressBar currentMs={isActive ? 0 : 0} durationMs={1} />
