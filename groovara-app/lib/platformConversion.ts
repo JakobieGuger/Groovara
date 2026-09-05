@@ -254,8 +254,16 @@ export async function convertTrackPlatform(
     }
 
     const converted = data?.track;
+
+    // Explicitly narrow the object itself before reading its properties.
+    // TypeScript does not infer `converted` exists just because a separately
+    // derived `convertedUrl` happens to be non-null.
+    if (!converted) {
+      return track;
+    }
+
     const convertedUrl =
-      typeof converted?.url === "string"
+      typeof converted.url === "string"
         ? converted.url
         : null;
 
