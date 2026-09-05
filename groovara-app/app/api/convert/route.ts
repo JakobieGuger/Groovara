@@ -555,6 +555,23 @@ export async function POST(req: Request) {
 
     if (!searchResponse.ok) {
       const detail = await searchResponse.text();
+      let downstreamError:
+        | {
+            error?: string;
+            code?: string;
+            manualSearchUrl?: string;
+          }
+        | null = null;
+
+      try {
+        downstreamError = JSON.parse(detail) as {
+          error?: string;
+          code?: string;
+          manualSearchUrl?: string;
+        };
+      } catch {
+        downstreamError = null;
+      }
 
       console.error("platform conversion search failed", {
         targetPlatform,
@@ -562,7 +579,47 @@ export async function POST(req: Request) {
         detail: detail.slice(0, 500),
       });
 
-      // Cache the failed attempt so we do not keep hammering APIs for the same doomed conversion.
+      const youtubeQuotaUnavailable =
+        targetPlatform === "youtube" &&
+        (downstreamError?.code ===
+          "youtube_search_budget_exhausted" ||
+          downstreamError?.code ===
+            "youtube_search_quota_exhausted");
+
+      if (youtubeQuotaUnavailable) {
+        // Quota exhaustion is temporary. Never poison the persistent
+        // conversion cache with a long-lived "error" row just because today's
+        // YouTube search allowance ran out.
+        return NextResponse.json(
+          {
+            error:
+              downstreamError?.error ??
+              "YouTube search is temporarily unavailable.",
+            code:
+              downstreamError?.code ??
+              "youtube_search_budget_exhausted",
+            manualSearchUrl:
+              downstreamError?.manualSearchUrl ??
+              (
+                "https://www.youtube.com/results?search_query=" +
+                encodeURIComponent(query)
+              ),
+            status: "quota_unavailable",
+            track: {
+              title: sourceTitle,
+              artist: sourceArtist,
+              platform: sourcePlatform,
+              track_id: "",
+              url: sourceUrl,
+            },
+          },
+          { status: 429 },
+        );
+      }
+
+      // Cache ordinary failed attempts so we do not keep hammering APIs for
+      // the same doomed conversion. Temporary YouTube quota failures above
+      // intentionally never reach this block.
       await admin.from("platform_conversions").upsert(
         {
           source_platform: sourcePlatform,

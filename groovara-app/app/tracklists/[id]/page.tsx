@@ -255,7 +255,8 @@ export default function TracklistDetailPage() {
   const selectedCount = selectedIds.size;
 
   const SONG_NOTE_LIMIT = 2000;
-  const FINISHING_NOTE_LIMIT = 2000;
+  const DESCRIPTION_LIMIT = 1000;
+  const FINISHING_NOTE_LIMIT = 1000;
 
   const busy =
     saving ||
@@ -834,7 +835,7 @@ export default function TracklistDetailPage() {
 
   return (
     <main className="gv-paper-bg min-h-screen">
-      <div className="gv-paper-content">
+      <div className="gv-paper-content mx-auto w-full max-w-6xl">
         <div className="text-center">
           <h1 className="text-3xl font-semibold tracking-wide text-gv-accent">
             {item?.title}
@@ -842,7 +843,7 @@ export default function TracklistDetailPage() {
         </div>
 
         {!loading && songs.length === 0 && !pageError && (
-          <div className="mt-6">
+          <div className="mx-auto mt-6 max-w-2xl">
             <InlineNotice
               kind="info"
               title="No songs yet"
@@ -851,7 +852,7 @@ export default function TracklistDetailPage() {
           </div>
         )}
 
-        <div className="mt-10 max-w-xl space-y-4">
+        <div className="mx-auto mt-10 max-w-2xl space-y-4">
           <div>
             <label className="block text-xs tracking-widest text-gv-accent">
               TITLE
@@ -880,9 +881,12 @@ export default function TracklistDetailPage() {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              maxLength={DESCRIPTION_LIMIT}
               className="mt-2 w-full rounded-xl border gv-row border-white/10 bg-white/5 px-4 py-3 text-gv-accent outline-none focus:border-purple-500/40"
               rows={5}
             />
+
+            <CharacterCounter value={description} max={DESCRIPTION_LIMIT} />
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -912,7 +916,7 @@ export default function TracklistDetailPage() {
           </div>
         </div>
 
-        <div className="mt-12 flex items-center justify-between">
+        <div className="mx-auto mt-12 flex max-w-4xl items-center justify-between">
           <h2 className="text-lg font-light tracking-wide">Songs</h2>
 
           <button
@@ -927,7 +931,7 @@ export default function TracklistDetailPage() {
 
 
         {multiNoteMode ? (
-          <div className="mt-4 max-w-xl rounded-2xl gv-row border border-white/10 bg-white/5 p-5">
+          <div className="mx-auto mt-4 max-w-2xl rounded-2xl gv-row border border-white/10 bg-white/5 p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs tracking-widest text-gray-400">
@@ -985,19 +989,19 @@ export default function TracklistDetailPage() {
           </div>
         ) : null}
 
-        <div className="mt-4">
+        <div className="mx-auto mt-4 max-w-4xl">
           <div className={busy ? "opacity-50 pointer-events-none" : ""}>
             <UnifiedSearch onAdd={addSong} />
           </div>
         </div>
 
         {DEV_MANUAL_ADD && (
-          <div className="mt-4 border border-yellow-500/30 bg-yellow-500/10 p-3 rounded-lg">
+          <div className="mx-auto mt-4 max-w-4xl rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
             <div className="text-xs text-yellow-300 tracking-widest mb-2">
               DEV ONLY
             </div>
 
-            <div className="max-w-xl rounded-2xl border border-white/10 bg-white/5 p-5">
+            <div className="mx-auto max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-5">
               <p className="text-xs tracking-widest text-gray-400">
                 MANUAL ADD
               </p>
@@ -1043,7 +1047,7 @@ export default function TracklistDetailPage() {
           </div>
         )}
 
-        <div className="mt-8 space-y-2">
+        <div className="mx-auto mt-8 max-w-4xl space-y-2">
           {songs.length === 0 ? (
             <p className="text-sm text-gray-400">
               No songs yet. Add one above.
@@ -1176,7 +1180,7 @@ export default function TracklistDetailPage() {
             })
           )}
 
-          <div className="mt-10 max-w-xl rounded-2xl border border-white/10 gv-accent p-5">
+          <div className="mx-auto mt-10 max-w-2xl rounded-2xl border border-white/10 gv-accent p-5">
             <p className="text-xs tracking-widest text-gray-400">
               CREATE MIXLIST
             </p>

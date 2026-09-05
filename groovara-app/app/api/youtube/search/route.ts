@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  claimYouTubeAutomaticSearchBudget,
+  claimYouTubeSearchBudget,
+  type YouTubeSearchBudgetPurpose,
 } from "@/lib/youtubeSearchBudget";
 
 export const runtime = "nodejs";
@@ -31,13 +32,33 @@ type YouTubeTrack = {
 };
 
 function cleanTitle(raw: string) {
-  // YouTube titles often contain HTML entities.
   return raw
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">");
+}
+
+function buildManualSearchUrl(query: string) {
+  return (
+    "https://www.youtube.com/results?search_query=" +
+    encodeURIComponent(query)
+  );
+}
+
+function looksLikeYouTubeQuotaError(status: number, detail: string) {
+  if (status !== 403 && status !== 429) return false;
+
+  const normalized = detail.toLowerCase();
+
+  return (
+    normalized.includes("quota") ||
+    normalized.includes("ratelimit") ||
+    normalized.includes("rate limit") ||
+    normalized.includes("dailylimit") ||
+    normalized.includes("daily limit")
+  );
 }
 
 async function cacheYouTubeTracks(tracks: YouTubeTrack[]) {
@@ -65,7 +86,6 @@ async function cacheYouTubeTracks(tracks: YouTubeTrack[]) {
       console.error("YouTube search cache upsert failed", error);
     }
   } catch (error) {
-    // Search should still work even if compliance cache writes fail.
     console.error("YouTube search cache write crashed", error);
   }
 }
@@ -73,42 +93,52 @@ async function cacheYouTubeTracks(tracks: YouTubeTrack[]) {
 export async function GET(req: Request) {
   try {
     const key = process.env.YOUTUBE_API_KEY;
+
     if (!key) {
       return NextResponse.json(
         { error: "Missing YOUTUBE_API_KEY env var." },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-  const { searchParams } = new URL(req.url);
-  const q = (searchParams.get("q") ?? "").trim();
-  const usage = (searchParams.get("usage") ?? "").trim();
-    
-  if (!q) {
-    return NextResponse.json({ tracks: [] });
-  }
-  
-  let automaticSearchBudget = null;
-  
-  if (usage === "automatic") {
-    automaticSearchBudget =
-      await claimYouTubeAutomaticSearchBudget(1);
-  
-    if (!automaticSearchBudget.allowed) {
+    const { searchParams } = new URL(req.url);
+    const q = (searchParams.get("q") ?? "").trim();
+    const usage = (searchParams.get("usage") ?? "").trim();
+
+    if (!q) {
+      return NextResponse.json({ tracks: [] });
+    }
+
+    const manualSearchUrl = buildManualSearchUrl(q);
+
+    // Conversion/export requests already send usage=automatic and get first
+    // priority. Direct Studio searches use the reserved lower-priority pool.
+    const purpose: YouTubeSearchBudgetPurpose =
+      usage === "automatic" ||
+      usage === "priority" ||
+      usage === "export"
+        ? "priority"
+        : "studio";
+
+    const searchBudget = await claimYouTubeSearchBudget(1, purpose);
+
+    if (!searchBudget.allowed) {
+      const error =
+        purpose === "studio"
+          ? "YouTube search is temporarily unavailable in Studio so Groovara can reserve today's remaining searches for Mixlist listening and exports."
+          : "YouTube search is temporarily unavailable because today's YouTube search allowance has been reached.";
+
       return NextResponse.json(
         {
-          error:
-            "Groovara's automatic YouTube search budget has been reached for today.",
+          error,
           code: "youtube_search_budget_exhausted",
-          budget: automaticSearchBudget,
+          manualSearchUrl,
+          budget: searchBudget,
         },
         { status: 429 },
       );
     }
-  }
-    if (!q) return NextResponse.json({ tracks: [] });
 
-    // Search videos only; "music video" bias via query is a decent first pass.
     const url =
       "https://www.googleapis.com/youtube/v3/search" +
       `?part=snippet&type=video&maxResults=10&q=${encodeURIComponent(q)}` +
@@ -124,12 +154,26 @@ export async function GET(req: Request) {
         body: text,
       });
 
+      if (looksLikeYouTubeQuotaError(res.status, text)) {
+        return NextResponse.json(
+          {
+            error:
+              "YouTube search is temporarily unavailable because YouTube's API search limit has been reached.",
+            code: "youtube_search_quota_exhausted",
+            manualSearchUrl,
+            budget: searchBudget,
+          },
+          { status: 429 },
+        );
+      }
+
       return NextResponse.json(
         {
           error: `YouTube search failed (${res.status})`,
           detail: text.slice(0, 1000),
+          manualSearchUrl,
         },
-        { status: res.status }
+        { status: res.status },
       );
     }
 
@@ -153,8 +197,6 @@ export async function GET(req: Request) {
           return {
             id: videoId,
             title: cleanTitle(titleRaw),
-            // For YouTube, we do not reliably know artist/album yet.
-            // Use channel as "artist" for now to keep consistent UI.
             artist: channel,
             album: "YouTube",
             url: `https://www.youtube.com/watch?v=${videoId}`,
@@ -165,14 +207,19 @@ export async function GET(req: Request) {
 
     await cacheYouTubeTracks(tracks);
 
-  return NextResponse.json({
-    tracks,
-    automaticSearchBudget,
-  });
+    return NextResponse.json({
+      tracks,
+      searchBudget,
+    });
   } catch (e: unknown) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "YouTube route error" },
-      { status: 500 }
+      {
+        error:
+          e instanceof Error
+            ? e.message
+            : "YouTube route error",
+      },
+      { status: 500 },
     );
   }
 }

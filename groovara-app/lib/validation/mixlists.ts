@@ -2,8 +2,8 @@ import { z } from "zod";
 
 const MAX = {
   title: 120,
-  globalMessage: 2000,
-  finishingNote: 2000,
+  globalMessage: 1000,
+  finishingNote: 1000,
   displayName: 120,
   songTitle: 300,
   artist: 200,
