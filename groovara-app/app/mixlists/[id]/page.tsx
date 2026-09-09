@@ -1427,15 +1427,15 @@ export default function MixlistPage() {
             handlePreferredPlatformChange(e.target.value as Platform)
           }
           aria-label="Listen on platform"
-          className="w-40 appearance-none rounded-xl border border-[#5B4B6E] bg-black/70 px-4 py-2.5 text-sm text-white outline-none transition hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-[#5B4B6E]/50 sm:w-48"
+          className="w-40 appearance-none rounded-xl border border-[#5B4B6E] bg-card px-4 py-2.5 text-sm text-foreground outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-[#5B4B6E]/50 dark:bg-black/70 dark:text-white dark:hover:bg-black/80 sm:w-48"
         >
-          <option value="spotify" className="bg-black text-white">
+          <option value="spotify" className="bg-card text-foreground dark:bg-black dark:text-white">
             Spotify
           </option>
-          <option value="youtube" className="bg-black text-white">
+          <option value="youtube" className="bg-card text-foreground dark:bg-black dark:text-white">
             YouTube
           </option>
-          <option value="apple" className="bg-black text-white">
+          <option value="apple" className="bg-card text-foreground dark:bg-black dark:text-white">
             Apple Music
           </option>
         </select>
@@ -1709,20 +1709,15 @@ export default function MixlistPage() {
   }
 
   return (
-    <main
-      className="relative min-h-screen overflow-hidden p-6 text-foreground sm:p-10"
-      style={{
-        background:
-          typeof document !== "undefined" &&
-          document.documentElement.classList.contains("dark")
-            ? ambientTrack != null
-              ? `radial-gradient(circle at 20% 12%, ${ambientTrack.theme.accentColor}22, transparent 45%),
-                 radial-gradient(circle at 80% 84%, ${ambientTrack.theme.glowColor}26, transparent 40%),
-                 #1B1B19`
-              : "#1B1B19"
-            : undefined,
-      }}
-    >
+    <main className="relative min-h-screen overflow-hidden bg-background p-6 text-foreground sm:p-10">
+      <div
+        className="pointer-events-none absolute inset-0 hidden dark:block"
+        style={{
+          background: `radial-gradient(circle at 20% 12%, ${ambientTrack.theme.accentColor}22, transparent 45%),
+                       radial-gradient(circle at 80% 84%, ${ambientTrack.theme.glowColor}26, transparent 40%),
+                       #1B1B19`,
+        }}
+      />
       {!showEndPanel ? (
         <div className="pointer-events-none absolute inset-0">
           <TrackScene

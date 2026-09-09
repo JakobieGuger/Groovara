@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { motion, type Variants } from "framer-motion";
 import EmbeddedPlayer from "./EmbeddedPlayer";
 import ProgressBar from "./ProgressBar";
@@ -40,11 +40,13 @@ export default function TrackView({
 }: TrackViewProps) {
   return (
     <section
-      className="relative overflow-hidden rounded-3xl border-2 border-[#5B4B6E] bg-card/70 p-5 backdrop-blur-md sm:p-6"
-      style={{
-        color: track.theme.textColor,
-        backgroundColor: track.theme.backgroundColor,
-      }}
+      className="relative overflow-hidden rounded-3xl border-2 border-[#5B4B6E] bg-card/70 p-5 text-foreground backdrop-blur-md dark:bg-[var(--track-theme-background)] dark:text-[var(--track-theme-text)] sm:p-6"
+      style={
+        {
+          "--track-theme-background": track.theme.backgroundColor,
+          "--track-theme-text": track.theme.textColor,
+        } as CSSProperties
+      }
     >
       <motion.div
         className="relative z-10 space-y-4"
