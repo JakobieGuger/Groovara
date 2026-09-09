@@ -88,15 +88,30 @@ function getYouTubeOAuthCredentials() {
 
 export function getYouTubeOAuthConfig(origin?: string) {
   const { clientId, clientSecret } = getYouTubeOAuthCredentials();
-  const configuredRedirectUri = process.env.YOUTUBE_OAUTH_REDIRECT_URI?.trim();
 
-  const redirectUri =
-    configuredRedirectUri ||
-    (origin ? `${origin}/api/youtube/callback` : undefined);
+  const configuredRedirectUri =
+    process.env.YOUTUBE_OAUTH_REDIRECT_URI?.trim();
+
+  let redirectUri: string | undefined;
+
+  if (process.env.NODE_ENV === "production") {
+    redirectUri = configuredRedirectUri;
+
+    if (!redirectUri) {
+      throw new YouTubeConnectionError(
+        "Missing YOUTUBE_OAUTH_REDIRECT_URI environment variable.",
+        "youtube_oauth_not_configured",
+      );
+    }
+  } else {
+    redirectUri =
+      configuredRedirectUri ||
+      (origin ? `${origin}/api/youtube/callback` : undefined);
+  }
 
   if (!redirectUri) {
     throw new YouTubeConnectionError(
-      "Missing YOUTUBE_OAUTH_REDIRECT_URI environment variable.",
+      "Missing YouTube OAuth redirect URI.",
       "youtube_oauth_not_configured",
     );
   }
