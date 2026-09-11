@@ -51,9 +51,9 @@ type UserSettings = {
 };
 
 const PLATFORM_ICONS: Record<string, string> = {
-  spotify: "/icons/spotify24.png",
-  youtube: "/icons/youtube24.png",
-  apple: "/icons/apple24.png",
+  spotify: "/icons/spotify36.png",
+  youtube: "/icons/youtube36.png",
+  apple: "/icons/apple36.png",
 };
 
 
@@ -1081,8 +1081,8 @@ export default function TracklistDetailPage() {
                           <Image
                             src={PLATFORM_ICONS[s.platform]}
                             alt={s.platform}
-                            width={24}
-                            height={24}
+                            width={36}
+                            height={36}
                             className="opacity-80 flex-shrink-0"
                           />
                         ) : null}
