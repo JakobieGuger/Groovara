@@ -19,9 +19,14 @@ import {
   removeSongFromTracklistAction,
   saveTracklistSongNoteAction,
   updateTracklistMetadataAction,
+  updateTracklistSongPlatformAction,
 } from "./actions";
 import { deleteTracklistAction } from "../actions";
 import CharacterCounter from "@/lib/CharacterCounter";
+import {
+  convertTrackPlatform,
+  type Platform as ConversionPlatform,
+} from "@/lib/platformConversion";
 
 type Tracklist = {
   id: string;
@@ -56,6 +61,47 @@ const PLATFORM_ICONS: Record<string, string> = {
   apple: "/icons/apple36.png",
 };
 
+
+const STUDIO_CONVERSION_PLATFORMS: Array<{
+  id: ConversionPlatform;
+  label: string;
+}> = [
+  { id: "spotify", label: "Spotify" },
+  { id: "youtube", label: "YouTube" },
+  { id: "apple", label: "Apple Music" },
+];
+
+function getStudioSongPlatform(
+  song: TrackSong,
+): ConversionPlatform | null {
+  if (
+    song.platform === "spotify" ||
+    song.platform === "youtube" ||
+    song.platform === "apple"
+  ) {
+    return song.platform;
+  }
+
+  const value = song.url.toLowerCase();
+
+  if (value.includes("spotify.com")) return "spotify";
+
+  if (
+    value.includes("youtube.com") ||
+    value.includes("youtu.be")
+  ) {
+    return "youtube";
+  }
+
+  if (
+    value.includes("music.apple.com") ||
+    value.includes("itunes.apple.com")
+  ) {
+    return "apple";
+  }
+
+  return null;
+}
 
 function getActionError(result: {
   type: string;
@@ -246,6 +292,10 @@ export default function TracklistDetailPage() {
     {},
   );
   const [savingNoteId, setSavingNoteId] = useState<string | null>(null);
+  const [conversionMenuSongId, setConversionMenuSongId] =
+    useState<string | null>(null);
+  const [convertingSongId, setConvertingSongId] =
+    useState<string | null>(null);
 
   const [multiNoteMode, setMultiNoteMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -606,6 +656,117 @@ export default function TracklistDetailPage() {
     }
 
     await loadSongs();
+  };
+
+  const convertStudioSong = async (
+    song: TrackSong,
+    targetPlatform: ConversionPlatform,
+  ) => {
+    if (convertingSongId) return;
+
+    const sourcePlatform = getStudioSongPlatform(song);
+
+    if (!sourcePlatform) {
+      setPageError(
+        "Groovara could not determine this song's current platform.",
+      );
+      return;
+    }
+
+    if (sourcePlatform === targetPlatform) {
+      setConversionMenuSongId(null);
+      return;
+    }
+
+    setConvertingSongId(song.id);
+    setPageError(null);
+    setPageInfo(null);
+
+    try {
+      // This conversion only runs after an explicit click in Studio, so it is
+      // allowed to perform a fresh platform search when the cache has no match.
+      const converted = await convertTrackPlatform(
+        {
+          title: song.title,
+          artist: song.artist,
+          platform: sourcePlatform,
+          track_id: song.track_id ?? "",
+          url: song.url,
+          isrc: song.isrc,
+        },
+        targetPlatform,
+        { allowSearch: true },
+      );
+
+      const convertedTrackId = converted.track_id?.trim();
+      const convertedUrl = converted.url?.trim();
+
+      if (
+        converted.platform !== targetPlatform ||
+        !convertedTrackId ||
+        !convertedUrl
+      ) {
+        const label =
+          STUDIO_CONVERSION_PLATFORMS.find(
+            (platform) => platform.id === targetPlatform,
+          )?.label ?? targetPlatform;
+
+        setPageError(
+          `Groovara could not find a ${label} match for “${song.title}”.`,
+        );
+        return;
+      }
+
+      const result = await updateTracklistSongPlatformAction({
+        tracklistId: String(id),
+        songId: song.id,
+        platform: targetPlatform,
+        track_id: convertedTrackId,
+        url: convertedUrl,
+      });
+
+      if (!result.ok) {
+        setPageError(getActionError(result));
+        return;
+      }
+
+      // Preserve the Studio's clean title/artist/album/note metadata. Only the
+      // platform identity and destination link are replaced.
+      setSongs((current) =>
+        current.map((candidate) =>
+          candidate.id === song.id
+            ? {
+                ...candidate,
+                platform: targetPlatform,
+                track_id: convertedTrackId,
+                url: convertedUrl,
+              }
+            : candidate,
+        ),
+      );
+
+      setConversionMenuSongId(null);
+
+      const label =
+        STUDIO_CONVERSION_PLATFORMS.find(
+          (platform) => platform.id === targetPlatform,
+        )?.label ?? targetPlatform;
+
+      setPageInfo(`Converted “${song.title}” to ${label}.`);
+      window.setTimeout(() => setPageInfo(null), 1800);
+
+      trackEvent("converted_studio_song", {
+        tracklist_id: String(id),
+        song_id: song.id,
+        source_platform: sourcePlatform,
+        target_platform: targetPlatform,
+      });
+    } catch (error) {
+      console.error("Studio song conversion failed", error);
+      setPageError("Song conversion failed. Please try again.");
+    } finally {
+      setConvertingSongId(null);
+    }
   };
 
   const saveSingleNote = async (songId: string) => {
@@ -1057,46 +1218,120 @@ export default function TracklistDetailPage() {
               const noteOpen = expandedNoteId === s.id;
               const hasNote = (s.note ?? "").trim().length > 0;
               const selected = selectedIds.has(s.id);
+              const sourcePlatform = getStudioSongPlatform(s);
+              const conversionTargets =
+                STUDIO_CONVERSION_PLATFORMS.filter(
+                  (platform) => platform.id !== sourcePlatform,
+                );
+              const conversionMenuOpen =
+                conversionMenuSongId === s.id;
+              const convertingThisSong =
+                convertingSongId === s.id;
 
               return (
-                <div key={s.id} className="rounded-2xl gv-row">
+                <div
+                  key={s.id}
+                  className={`relative overflow-visible rounded-2xl gv-row ${
+                    conversionMenuOpen ? "z-[700]" : "z-0"
+                  }`}
+                >
                   <div className="flex items-center justify-between gap-4 px-4 py-3">
-                    <a
-                      href={s.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="min-w-0 flex-1 transition hover:text-purple-700 dark:hover:text-purple-200"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        {multiNoteMode ? (
-                          <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={() => toggleSelected(s.id)}
-                            className="h-4 w-4 accent-purple-400 flex-shrink-0"
-                          />
-                        ) : null}
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      {multiNoteMode ? (
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleSelected(s.id)}
+                          className="h-4 w-4 accent-purple-400 flex-shrink-0"
+                        />
+                      ) : null}
 
-                        {s.platform && PLATFORM_ICONS[s.platform] ? (
+                      {sourcePlatform &&
+                      PLATFORM_ICONS[sourcePlatform] ? (
+                        <div className="relative flex flex-shrink-0 items-center">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setConversionMenuSongId((current) =>
+                                current === s.id ? null : s.id,
+                              )
+                            }
+                            disabled={Boolean(
+                              convertingSongId &&
+                                convertingSongId !== s.id,
+                            )}
+                            aria-label={`Convert ${s.title} to another platform`}
+                            aria-haspopup="menu"
+                            aria-expanded={conversionMenuOpen}
+                            title="Convert song"
+                            className="mr-0.5 grid h-7 w-5 place-items-center rounded-md text-[11px] text-gv-accent transition hover:bg-purple-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {convertingThisSong ? "…" : "▾"}
+                          </button>
+
                           <Image
-                            src={PLATFORM_ICONS[s.platform]}
-                            alt={s.platform}
+                            src={PLATFORM_ICONS[sourcePlatform]}
+                            alt={sourcePlatform}
                             width={36}
                             height={36}
                             className="opacity-80 flex-shrink-0"
                           />
-                        ) : null}
 
+                          {conversionMenuOpen ? (
+                            <div
+                              role="menu"
+                              className="absolute left-0 top-full z-[600] mt-2 w-44 rounded-xl border border-border bg-background/95 p-2 shadow-2xl backdrop-blur"
+                            >
+                              <p className="px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                Convert to:
+                              </p>
+
+                              {conversionTargets.map((platform) => (
+                                <button
+                                  key={platform.id}
+                                  type="button"
+                                  role="menuitem"
+                                  disabled={convertingThisSong}
+                                  onClick={() =>
+                                    void convertStudioSong(
+                                      s,
+                                      platform.id,
+                                    )
+                                  }
+                                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs text-foreground transition hover:bg-purple-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <Image
+                                    src={PLATFORM_ICONS[platform.id]}
+                                    alt=""
+                                    aria-hidden="true"
+                                    width={24}
+                                    height={24}
+                                    className="flex-shrink-0 opacity-80"
+                                  />
+                                  <span>{platform.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      <a
+                        href={s.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="min-w-0 flex-1 transition hover:text-purple-700 dark:hover:text-purple-200"
+                      >
                         <p className="truncate text-sm text-foreground dark:text-gv-accent">
                           {s.position + 1}. {s.title}
                         </p>
-                      </div>
 
-                      <p className="truncate text-xs gv-accent dark:text-gv-accent">
-                        {s.artist}
-                        {s.album ? ` • ${s.album}` : ""}
-                      </p>
-                    </a>
+                        <p className="truncate text-xs gv-accent dark:text-gv-accent">
+                          {s.artist}
+                          {s.album ? ` • ${s.album}` : ""}
+                        </p>
+                      </a>
+                    </div>
 
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <button

@@ -68,6 +68,7 @@ type SubmissionBody = {
   musicServices?: unknown;
   musicServiceOther?: unknown;
   meaningfulStory?: unknown;
+  referralSource?: unknown;
   website?: unknown;
   turnstileToken?: unknown;
 };
@@ -118,6 +119,8 @@ export async function POST(request: Request) {
   const meaningfulStory =
     cleanString(body.meaningfulStory, 2000) || null;
 
+  const referralSource = cleanString(body.referralSource, 240);
+
   const turnstileToken = cleanString(
     body.turnstileToken,
     2048,
@@ -126,6 +129,13 @@ export async function POST(request: Request) {
   if (!name || !/^\S+@\S+\.\S+$/.test(email)) {
     return NextResponse.json(
       { error: "Please provide a valid name and email address." },
+      { status: 400 },
+    );
+  }
+
+  if (!referralSource) {
+    return NextResponse.json(
+      { error: "Tell us how you heard about Groovara." },
       { status: 400 },
     );
   }
@@ -243,6 +253,7 @@ export async function POST(request: Request) {
       music_services: musicServices,
       music_service_other: musicServiceOther,
       meaningful_story: meaningfulStory,
+      referral_source: referralSource,
     });
 
   if (error) {

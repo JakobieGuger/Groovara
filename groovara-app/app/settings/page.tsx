@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import InlineNotice from "../../lib/InlineNotice";
+import AppleMusicConnectionCard from "@/lib/AppleMusicConnectionCard";
 import { supabase } from "../../lib/supabaseClient";
 import {
   loadOrInitializeSettingsAction,
@@ -447,6 +448,10 @@ export default function SettingsPage() {
                     </div>
                   )}
                 </div>
+
+                <div className="my-6 h-px bg-border/70" />
+
+                <AppleMusicConnectionCard />
               </div>
             </div>
           ) : null}

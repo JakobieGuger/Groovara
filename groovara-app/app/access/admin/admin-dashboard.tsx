@@ -28,6 +28,7 @@ type BetaApplication = {
   music_services: string[];
   music_service_other: string | null;
   meaningful_story: string | null;
+  referral_source: string | null;
 };
 
 const statuses: ApplicationStatus[] = [
@@ -165,6 +166,7 @@ export function AdminDashboard() {
       "Goal other",
       "Services",
       "Service other",
+      "How heard about us",
       "Story",
     ];
 
@@ -180,6 +182,7 @@ export function AdminDashboard() {
       application.collection_goal_other ?? "",
       application.music_services.join("; "),
       application.music_service_other ?? "",
+      application.referral_source ?? "",
       application.meaningful_story ?? "",
     ]);
 
@@ -315,6 +318,7 @@ export function AdminDashboard() {
                       <th scope="col">Person</th>
                       <th scope="col">Listening</th>
                       <th scope="col">Services</th>
+                      <th scope="col">Heard about us</th>
                       <th scope="col">Story</th>
                       <th scope="col">Status</th>
                     </tr>
@@ -360,6 +364,13 @@ export function AdminDashboard() {
                               </span>
                             </>
                           ) : null}
+                        </td>
+                        <td>
+                          {application.referral_source ? (
+                            application.referral_source
+                          ) : (
+                            <span className="access-muted">Legacy request</span>
+                          )}
                         </td>
                         <td className="access-story-cell">
                           {application.meaningful_story ? (

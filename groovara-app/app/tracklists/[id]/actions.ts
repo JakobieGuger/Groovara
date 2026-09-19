@@ -176,6 +176,14 @@ const trackSongSchema = z.object({
   ),
 });
 
+const updateSongPlatformSchema = z.object({
+  tracklistId: z.string().uuid("Invalid tracklist id."),
+  songId: z.string().uuid("Invalid song id."),
+  platform: z.enum(["spotify", "youtube", "apple"]),
+  track_id: z.string().trim().min(1, "Track id is required.").max(200),
+  url: z.string().trim().url("URL must be valid.").max(2048),
+});
+
 const removeSongSchema = z.object({
   tracklistId: z.string().uuid("Invalid tracklist id."),
   songId: z.string().uuid("Invalid song id."),
@@ -471,6 +479,104 @@ export async function addSongToTracklistAction(rawInput: unknown): Promise<OkRes
 
 export async function addManualSongToTracklistAction(rawInput: unknown): Promise<OkResult | ValidationResult> {
   return addSongToTracklistAction(rawInput);
+}
+
+export async function updateTracklistSongPlatformAction(
+  rawInput: unknown,
+): Promise<OkResult | ValidationResult> {
+  const parsed = updateSongPlatformSchema.safeParse(rawInput);
+
+  if (!parsed.success) {
+    return validationFailure(parsed.error);
+  }
+
+  const {
+    tracklistId,
+    songId,
+    platform,
+    track_id,
+    url,
+  } = parsed.data;
+
+  const { supabase, user, error: authError } = await getAuthedUser();
+
+  if (authError || !user) {
+    return { ok: false, type: "auth", message: "Not authenticated." };
+  }
+
+  const { data: owned, error: ownErr } =
+    await verifyTracklistOwnership(
+      supabase,
+      tracklistId,
+      user.id,
+    );
+
+  if (ownErr) {
+    return {
+      ok: false,
+      type: "db",
+      message:
+        ownErr.message ??
+        "Failed to verify tracklist ownership.",
+    };
+  }
+
+  if (!owned) {
+    return {
+      ok: false,
+      type: "not_found",
+      message:
+        "Tracklist not found or you do not have access to it.",
+    };
+  }
+
+  const { data: song, error: songErr } =
+    await verifySongOwnership(
+      supabase,
+      tracklistId,
+      songId,
+    );
+
+  if (songErr) {
+    return {
+      ok: false,
+      type: "db",
+      message:
+        songErr.message ??
+        "Failed to verify song ownership.",
+    };
+  }
+
+  if (!song) {
+    return {
+      ok: false,
+      type: "not_found",
+      message: "Song not found in this tracklist.",
+    };
+  }
+
+  const { error } = await supabase
+    .from("tracklist_songs")
+    .update({
+      platform,
+      track_id,
+      url,
+    })
+    .eq("id", songId)
+    .eq("tracklist_id", tracklistId);
+
+  if (error) {
+    return {
+      ok: false,
+      type: "db",
+      message:
+        error.message ??
+        "Failed to save the converted song.",
+    };
+  }
+
+  revalidatePath(`/tracklists/${tracklistId}`);
+  return { ok: true };
 }
 
 export async function removeSongFromTracklistAction(rawInput: unknown): Promise<OkResult | ValidationResult> {

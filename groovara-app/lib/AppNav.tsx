@@ -45,15 +45,21 @@ export default function AppNav() {
     { type: "divider" },
     {
       type: "link",
-      label: "Settings",
-      description: "Tune your listening preferences",
-      href: "/settings",
-    },
-    {
-      type: "link",
       label: "About",
       description: "What is Groovara?",
       href: "/about",
+    },
+    {
+      type: "link",
+      label: "Guide",
+      description: "Learn how to use Groovara",
+      href: "/getting-started",
+    },
+    {
+      type: "link",
+      label: "Settings",
+      description: "Tune your listening preferences",
+      href: "/settings",
     },
     {
       type: "link",

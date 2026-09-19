@@ -20,6 +20,7 @@ type FormErrors = Partial<
     | "collectionHistory"
     | "musicServices"
     | "sharingReason"
+    | "referralSource"
     | "form",
     string
   >
@@ -161,6 +162,9 @@ export function BetaRequestForm({
     const meaningfulStory = String(
       formData.get("meaningfulStory") ?? "",
     ).trim();
+    const referralSource = String(
+      formData.get("referralSource") ?? "",
+    ).trim();
     const website = String(formData.get("website") ?? "").trim();
     const turnstileToken = String(
       formData.get("cf-turnstile-response") ?? "",
@@ -192,6 +196,9 @@ export function BetaRequestForm({
     ) {
       nextErrors.sharingReason =
         "Choose between one and three answers.";
+    }
+    if (!referralSource) {
+      nextErrors.referralSource = "Tell us how you heard about Groovara.";
     }
     if (turnstileSiteKey && !turnstileToken) {
       nextErrors.form = "Please complete the anti-spam check.";
@@ -238,6 +245,7 @@ export function BetaRequestForm({
           musicServices,
           musicServiceOther,
           meaningfulStory,
+          referralSource,
           website,
           turnstileToken,
         }),
@@ -264,6 +272,7 @@ export function BetaRequestForm({
         listening_style_count: listeningStyles.length,
         sharing_reason_count: sharingReasons.length,
         has_story: meaningfulStory.length > 0,
+        has_referral_source: referralSource.length > 0,
       });
     } catch {
       setErrors({
@@ -644,6 +653,28 @@ export function BetaRequestForm({
                   name="meaningfulStory"
                   placeholder="A few sentences is plenty."
                 />
+              </label>
+
+              <label className="access-text-field">
+                <span>
+                  How did you hear about us? <b>*</b>
+                </span>
+                <p className="access-question-helper">
+                  A friend, social media, a search, an event, or anywhere else
+                  you came across Groovara.
+                </p>
+                <input
+                  aria-invalid={Boolean(errors.referralSource)}
+                  maxLength={240}
+                  name="referralSource"
+                  placeholder="Tell us where you found Groovara"
+                  type="text"
+                />
+                {errors.referralSource ? (
+                  <small className="access-field-error">
+                    {errors.referralSource}
+                  </small>
+                ) : null}
               </label>
 
               <label className="access-hp-field" aria-hidden="true">

@@ -17,7 +17,7 @@ const csp = `
   font-src 'self' data:;
   style-src 'self' 'unsafe-inline' https:;
   script-src 'self' 'unsafe-inline' 'unsafe-eval' https:;
-  connect-src 'self' ${supabaseOrigin} https://api.spotify.com wss:;
+  connect-src 'self' ${supabaseOrigin} https://api.spotify.com https://api.music.apple.com wss:;
   frame-src 'self'
     https://open.spotify.com
     https://www.youtube.com

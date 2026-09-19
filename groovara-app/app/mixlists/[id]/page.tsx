@@ -8,6 +8,7 @@ import InlineNotice from "../../../lib/InlineNotice";
 import { supabase } from "../../../lib/supabaseClient";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { convertTrackPlatform } from "@/lib/platformConversion";
+import { ensureAppleMusicAuthorized } from "@/lib/appleMusicClient";
 import { copyMixlistToStudioAction } from "./actions";
 import {
   createTheme,
@@ -346,6 +347,7 @@ export default function MixlistPage() {
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [endExportMenuOpen, setEndExportMenuOpen] = useState(false);
   const [exportingYouTube, setExportingYouTube] = useState(false);
+  const [exportingApple, setExportingApple] = useState(false);
   const [youtubePreviewOpen, setYouTubePreviewOpen] = useState(false);
   const [youtubePreviewLoading, setYouTubePreviewLoading] = useState(false);
   const [youtubePreview, setYouTubePreview] =
@@ -371,7 +373,6 @@ export default function MixlistPage() {
     "spotify" | "youtube" | "apple"
   >("youtube");
 
-  const [autoplayToken, setAutoplayToken] = useState(0);
   const [hasInteracted, setHasInteracted] = useState(false);
 
   type Platform = "spotify" | "youtube" | "apple";
@@ -482,6 +483,102 @@ export default function MixlistPage() {
     } catch (error) {
       console.error("Spotify export failed", error);
       alert("Spotify export failed.");
+    }
+  };
+
+  const handleExportApple = async () => {
+    if (exportingApple) return;
+
+    setExportMenuOpen(false);
+    setEndExportMenuOpen(false);
+    setExportingApple(true);
+    setCopyStatus("Connecting to Apple Music...");
+
+    try {
+      const musicUserToken = await ensureAppleMusicAuthorized();
+
+      setCopyStatus("Preparing Apple Music playlist...");
+
+      const res = await fetch("/api/apple/export", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mixlistId,
+          musicUserToken,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (
+        res.status === 401 &&
+        data?.loginUrl
+      ) {
+        window.location.href = data.loginUrl;
+        return;
+      }
+
+      if (!res.ok) {
+        const exportedCount = Number(data?.exportedCount ?? 0);
+        const skippedCount = Number(data?.skippedCount ?? 0);
+
+        if (exportedCount > 0) {
+          setCopyStatus(
+            "Apple Music created the playlist and exported " +
+              exportedCount +
+              " songs; " +
+              skippedCount +
+              " were not added.",
+          );
+          return;
+        }
+
+        const codeSuffix = data?.code ? " (" + data.code + ")" : "";
+        setCopyStatus(null);
+        alert(
+          (data?.error ?? "Apple Music export failed.") +
+            codeSuffix,
+        );
+        return;
+      }
+
+      const exportedCount = Number(data?.exportedCount ?? 0);
+      const skippedCount = Number(data?.skippedCount ?? 0);
+
+      trackEvent("exported_playlist", {
+        mixlist_id: mixlistId,
+        platform: "apple",
+        song_count: songs.length,
+        exported_count: exportedCount,
+        skipped_count: skippedCount,
+        storefront: data?.storefront ?? null,
+      });
+
+      setCopyStatus(
+        skippedCount > 0
+          ? "Exported " +
+              exportedCount +
+              " songs to Apple Music; skipped " +
+              skippedCount +
+              "."
+          : "Exported " +
+              exportedCount +
+              " songs to Apple Music.",
+      );
+
+      window.setTimeout(() => setCopyStatus(null), 5000);
+    } catch (error) {
+      console.error("Apple Music export failed", error);
+      setCopyStatus(null);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Apple Music export failed.",
+      );
+    } finally {
+      setExportingApple(false);
     }
   };
 
@@ -1207,20 +1304,6 @@ export default function MixlistPage() {
       !clicked.some((value) => value === true),
   );
 
-  useEffect(() => {
-    if (!hasInteracted) return;
-    if (!activeSong) return;
-    if (activeIsHidden) return;
-
-    setAutoplayToken((v) => v + 1);
-  }, [
-    safeSelectedIndex,
-    displayUiTrack?.url,
-    hasInteracted,
-    activeSong,
-    activeIsHidden,
-  ]);
-
   const revealSongAt = (index: number, source: string) => {
     if (index < 0 || index >= songs.length) return;
     if (clicked[index] === true) return;
@@ -1250,6 +1333,22 @@ export default function MixlistPage() {
     }
   };
 
+  const activateMediaFromUserGesture = () => {
+    /*
+     * Dispatch before React changes the song. The persistent provider player
+     * receives play() while we're still inside the browser's trusted click/
+     * keyboard event.
+     */
+    try {
+      window.dispatchEvent(
+        new Event("groovara:media-activate"),
+      );
+    } catch {}
+
+    setHasInteracted(true);
+  };
+
+
   const handleRevealNext = () => {
     const nextSlots = Math.min(revealedSlots + 1, songs.length);
     const nextIndex = Math.max(0, nextSlots - 1);
@@ -1262,7 +1361,7 @@ export default function MixlistPage() {
   const handlePrimaryReveal = () => {
     if (songs.length === 0) return;
 
-    setHasInteracted(true);
+    activateMediaFromUserGesture();
 
     if (clicked[0] !== true) {
       setRevealedSlots((current) => Math.max(1, current));
@@ -1275,12 +1374,12 @@ export default function MixlistPage() {
   };
 
   const handlePreviousSong = () => {
-    setHasInteracted(true);
+    activateMediaFromUserGesture();
     setSelectedIndex(Math.max(0, safeSelectedIndex - 1));
   };
 
   const handleNextSong = () => {
-    setHasInteracted(true);
+    activateMediaFromUserGesture();
 
     const nextIndex = Math.min(
       songs.length - 1,
@@ -1304,7 +1403,6 @@ export default function MixlistPage() {
 
     setSelectedIndex(0);
     setHasInteracted(false);
-    setAutoplayToken((value) => value + 1);
 
     if (mix?.reveal_mode) {
       setRevealedSlots(1);
@@ -1534,12 +1632,16 @@ export default function MixlistPage() {
 
       <button
         type="button"
-        disabled
-        className="flex w-full cursor-not-allowed items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-muted-foreground opacity-70"
+        onClick={() => {
+          closeMenu();
+          void handleExportApple();
+        }}
+        disabled={exportingApple}
+        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-foreground transition hover:bg-purple-500/10 disabled:cursor-not-allowed disabled:opacity-60"
       >
         <span>Apple Music</span>
-        <span className="text-[10px] uppercase tracking-widest">
-          Coming soon
+        <span className="text-xs text-[#5B4B6E] dark:text-[#C8BCA2]">
+          {exportingApple ? "Exporting..." : "Export"}
         </span>
       </button>
     </div>
@@ -1771,19 +1873,66 @@ export default function MixlistPage() {
         ) : null}
 
         <div className="mx-auto mt-6 grid max-w-5xl gap-4">
-          <div>
+          <div className="relative">
+            {displayUiTrack ? (
+              <div
+                className={
+                  showFirstSongIntro
+                    ? "pointer-events-none absolute inset-0 opacity-0"
+                    : ""
+                }
+                aria-hidden={
+                  showFirstSongIntro ? true : undefined
+                }
+              >
+                <TrackTransition
+                  transitionKey={`${safeSelectedIndex}:${
+                    displayUiTrack.platform ?? "none"
+                  }:${displayUiTrack.url ?? "no-url"}`}
+                >
+                  <TrackView
+                    track={displayUiTrack}
+                    isActive={true}
+                    isRevealed={!activeIsHidden}
+                    showNotes={false}
+                    notes={activeSong?.note}
+                    autoplay={hasInteracted}
+                    onReveal={() => {
+                      activateMediaFromUserGesture();
+                      setSelectedIndex(safeSelectedIndex);
+                    
+                      if (mix.reveal_mode) {
+                        revealSongAt(
+                          safeSelectedIndex,
+                          "player_reveal",
+                        );
+                      }
+                    }}
+                    disabledReason={
+                      activeIsHidden
+                        ? "Reveal this song to play it."
+                        : null
+                    }
+                    toolbarRight={playerPlatformSelector}
+                  />
+                </TrackTransition>
+              </div>
+            ) : null}
+
             {showFirstSongIntro ? (
               <section className="gv-row flex min-h-[28rem] flex-col items-center justify-center rounded-3xl border border-border px-6 py-12 text-center sm:px-10">
                 <p className="text-xs tracking-[0.24em] text-muted-foreground">
                   READY WHEN YOU ARE
                 </p>
+            
                 <h2 className="gv-accent mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
                   Your first song is waiting.
                 </h2>
+            
                 <p className="mt-4 max-w-lg text-sm leading-7 text-muted-foreground sm:text-base">
-                  The first title and
-                  artist will stay hidden until you begin.
+                  The first title and artist will stay hidden until you begin.
                 </p>
+            
                 <button
                   type="button"
                   onClick={handlePrimaryReveal}
@@ -1792,41 +1941,11 @@ export default function MixlistPage() {
                   REVEAL FIRST SONG
                 </button>
               </section>
-            ) : displayUiTrack ? (
-              <TrackTransition
-                transitionKey={`${safeSelectedIndex}:${
-                  displayUiTrack?.platform ?? "none"
-                }:${displayUiTrack?.url ?? "no-url"}`}
-              >
-                <TrackView
-                  key={`${displayUiTrack.id}:${displayUiTrack.platform}:${
-                    displayUiTrack.url ?? "no-url"
-                  }:${autoplayToken}`}
-                  track={displayUiTrack}
-                  isActive={true}
-                  isRevealed={!activeIsHidden}
-                  showNotes={false}
-                  notes={activeSong?.note}
-                  autoplay={hasInteracted}
-                  onReveal={() => {
-                    setHasInteracted(true);
-                    setSelectedIndex(safeSelectedIndex);
-
-                    if (mix.reveal_mode) {
-                      revealSongAt(safeSelectedIndex, "player_reveal");
-                    }
-                  }}
-                  disabledReason={
-                    activeIsHidden ? "Reveal this song to play it." : null
-                  }
-                  toolbarRight={playerPlatformSelector}
-                />
-              </TrackTransition>
-            ) : (
+            ) : !displayUiTrack ? (
               <div className="gv-row rounded-3xl p-6 text-sm text-muted-foreground">
                 Select a song to begin.
               </div>
-            )}
+            ) : null}
           </div>
 
           <aside className="space-y-4">
@@ -1858,7 +1977,7 @@ export default function MixlistPage() {
                   key={song.id}
                   type="button"
                   onClick={() => {
-                    setHasInteracted(true);
+                    activateMediaFromUserGesture();
                     setSelectedIndex(index);
                     revealSongAt(index, "song_list");
                   }}
@@ -1880,7 +1999,7 @@ export default function MixlistPage() {
                 role="button"
                 tabIndex={0}
                 onClick={() => {
-                  setHasInteracted(true);
+                  activateMediaFromUserGesture();
                   setSelectedIndex(index);
                 }}
                 onKeyDown={(event) => {
@@ -1889,7 +2008,7 @@ export default function MixlistPage() {
                     event.key === " "
                   ) {
                     event.preventDefault();
-                    setHasInteracted(true);
+                    activateMediaFromUserGesture();
                     setSelectedIndex(index);
                   }
                 }}

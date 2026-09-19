@@ -206,6 +206,9 @@ function freshSearchWasExplicitlyRequested(
 export async function convertTrackPlatform(
   track: ConvertibleTrack,
   preferredPlatform: Platform,
+  options?: {
+    allowSearch?: boolean;
+  },
 ): Promise<ConvertibleTrack> {
   if (track.platform === preferredPlatform) {
     return track;
@@ -225,6 +228,7 @@ export async function convertTrackPlatform(
         sourceIsrc: track.isrc ?? null,
         targetPlatform: preferredPlatform,
         allowSearch:
+          options?.allowSearch ??
           freshSearchWasExplicitlyRequested(
             preferredPlatform,
           ),
