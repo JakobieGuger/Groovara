@@ -6,6 +6,14 @@ type AppleMusicInstance = {
   musicUserToken?: string;
   isAuthorized?: boolean;
   storefrontId?: string;
+
+  setQueue: (options: {
+    song: string;
+    startPlaying?: boolean;
+  }) => Promise<unknown>;
+
+  play: () => Promise<unknown>;
+  pause: () => Promise<unknown> | void;
 };
 
 type AppleMusicNamespace = {
@@ -181,14 +189,15 @@ export async function getAppleMusicAuthorizationState() {
   };
 }
 
-export async function ensureAppleMusicAuthorized() {
+export async function ensureAppleMusicAuthorizedInstance() {
   const instance = await getConfiguredMusicKit();
 
-  const existingToken = readMusicUserToken(instance);
-  if (existingToken) return existingToken;
+  let token = readMusicUserToken(instance);
 
-  const result = await instance.authorize();
-  const token = readMusicUserToken(instance, result);
+  if (!token) {
+    const result = await instance.authorize();
+    token = readMusicUserToken(instance, result);
+  }
 
   if (!token) {
     throw new Error(
@@ -196,7 +205,17 @@ export async function ensureAppleMusicAuthorized() {
     );
   }
 
-  return token;
+  return {
+    instance,
+    musicUserToken: token,
+  };
+}
+
+export async function ensureAppleMusicAuthorized() {
+  const { musicUserToken } =
+    await ensureAppleMusicAuthorizedInstance();
+
+  return musicUserToken;
 }
 
 export async function disconnectAppleMusic() {

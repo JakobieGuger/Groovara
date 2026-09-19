@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { extractYouTubeId } from "./youtube";
+import { ensureAppleMusicAuthorizedInstance } from "@/lib/appleMusicClient";
 
 type EmbeddedPlayerProps = {
   url: string | null;
@@ -182,36 +183,12 @@ type YouTubeApi = {
   ) => YouTubePlayer;
 };
 
-type MusicKitInstance = {
-  isAuthorized?: boolean;
-  authorize: () => Promise<string>;
-  setQueue: (options: {
-    song: string;
-    autoplay?: boolean;
-  }) => Promise<unknown>;
-  play: () => Promise<unknown>;
-  pause: () => Promise<unknown>;
-};
-
-type MusicKitGlobal = {
-  configure: (options: {
-    developerToken: string;
-    app: {
-      name: string;
-      build: string;
-    };
-  }) => MusicKitInstance | void | Promise<MusicKitInstance | void>;
-  getInstance: () => MusicKitInstance;
-};
-
 type GroovaraWindow = Window & {
   onSpotifyIframeApiReady?: (api: SpotifyIframeApi) => void;
   __groovaraSpotifyIframeApi?: SpotifyIframeApi;
 
   YT?: YouTubeApi;
   onYouTubeIframeAPIReady?: () => void;
-
-  MusicKit?: MusicKitGlobal;
 };
 
 let spotifyApiPromise: Promise<SpotifyIframeApi> | null = null;
@@ -603,147 +580,8 @@ function YouTubePlayer({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Apple MusicKit JS                                                          */
+/* Apple MusicKit                                                             */
 /* -------------------------------------------------------------------------- */
-
-let musicKitScriptPromise: Promise<MusicKitGlobal> | null = null;
-let musicKitInstancePromise: Promise<MusicKitInstance> | null = null;
-
-function loadMusicKitScript(): Promise<MusicKitGlobal> {
-  const w = window as GroovaraWindow;
-
-  if (w.MusicKit) {
-    return Promise.resolve(w.MusicKit);
-  }
-
-  if (musicKitScriptPromise) {
-    return musicKitScriptPromise;
-  }
-
-  musicKitScriptPromise = new Promise((resolve, reject) => {
-    const finish = () => {
-      if (w.MusicKit) {
-        resolve(w.MusicKit);
-      } else {
-        musicKitScriptPromise = null;
-        reject(new Error("MusicKit loaded without a global API"));
-      }
-    };
-
-    const existing = document.querySelector<HTMLScriptElement>(
-      'script[src="https://js-cdn.music.apple.com/musickit/v3/musickit.js"]',
-    );
-
-    if (existing) {
-      if (w.MusicKit) {
-        finish();
-        return;
-      }
-
-      existing.addEventListener("load", finish, { once: true });
-      existing.addEventListener(
-        "error",
-        () => {
-          musicKitScriptPromise = null;
-          reject(new Error("MusicKit JS failed to load"));
-        },
-        { once: true },
-      );
-
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src =
-      "https://js-cdn.music.apple.com/musickit/v3/musickit.js";
-    script.async = true;
-
-    script.addEventListener("load", finish, { once: true });
-    script.addEventListener(
-      "error",
-      () => {
-        musicKitScriptPromise = null;
-        reject(new Error("MusicKit JS failed to load"));
-      },
-      { once: true },
-    );
-
-    document.head.appendChild(script);
-  });
-
-  return musicKitScriptPromise;
-}
-
-async function getMusicKitInstance(): Promise<MusicKitInstance> {
-  if (musicKitInstancePromise) {
-    return musicKitInstancePromise;
-  }
-
-  musicKitInstancePromise = (async () => {
-    const MusicKit = await loadMusicKitScript();
-
-    // AppleMusicConnectionCard may already have configured MusicKit.
-    try {
-      const existing = MusicKit.getInstance();
-      if (existing) return existing;
-    } catch {}
-
-    const response = await fetch("/api/apple/developer-token", {
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Apple developer token request failed (${response.status})`,
-      );
-    }
-
-    const raw = await response.text();
-
-    let developerToken = raw.trim();
-
-    try {
-      const parsed = JSON.parse(raw) as {
-        token?: string;
-        developerToken?: string;
-        developer_token?: string;
-      };
-
-      developerToken =
-        parsed.developerToken ??
-        parsed.developer_token ??
-        parsed.token ??
-        "";
-    } catch {
-      // Plain-text token response is also supported.
-    }
-
-    if (!developerToken) {
-      throw new Error("Apple developer token was empty");
-    }
-
-    const configured = await MusicKit.configure({
-      developerToken,
-      app: {
-        name: "Groovara",
-        build: "1.0.0",
-      },
-    });
-
-    if (configured) {
-      return configured;
-    }
-
-    return MusicKit.getInstance();
-  })();
-
-  try {
-    return await musicKitInstancePromise;
-  } catch (error) {
-    musicKitInstancePromise = null;
-    throw error;
-  }
-}
 
 function AppleMusicPlayer({
   appleTrackId,
@@ -758,7 +596,9 @@ function AppleMusicPlayer({
   artist?: string;
   autoplay: boolean;
 }) {
-  const musicRef = useRef<MusicKitInstance | null>(null);
+  const musicRef = useRef<Awaited<
+    ReturnType<typeof ensureAppleMusicAuthorizedInstance>
+  >["instance"] | null>(null);
   const currentIdRef = useRef(appleTrackId);
   const autoplayRef = useRef(autoplay);
 
@@ -775,11 +615,11 @@ function AppleMusicPlayer({
   useEffect(() => {
     let cancelled = false;
 
-    void getMusicKitInstance()
-      .then((music) => {
+    void ensureAppleMusicAuthorizedInstance()
+      .then(({ instance }) => {
         if (cancelled) return;
 
-        musicRef.current = music;
+        musicRef.current = instance;
         setReady(true);
         setStatus("ready");
       })
@@ -799,80 +639,69 @@ function AppleMusicPlayer({
     };
   }, []);
 
-  const playCurrent = async (authorizeIfNeeded: boolean) => {
+  const playCurrent = async () => {
     try {
-      const music =
-        musicRef.current ?? (await getMusicKitInstance());
-
+      const { instance: music } =
+        await ensureAppleMusicAuthorizedInstance();
+    
       musicRef.current = music;
-
-      if (!music.isAuthorized) {
-        if (!authorizeIfNeeded) {
-          return;
-        }
-
-        await music.authorize();
-      }
-
-      /*
-       * autoplay:true is passed as part of the queue request itself.
-       * When this comes from Groovara's reveal/next click, the operation
-       * begins directly from the listener's user gesture.
-       */
+    
       await music.setQueue({
         song: currentIdRef.current,
-        autoplay: true,
+        startPlaying: true,
       });
-
-      // Calling play as well covers MusicKit versions where queue autoplay
-      // is ignored or delayed.
+    
       await music.play();
-
+    
       setStatus("playing");
     } catch (error) {
       console.error(
         "[Groovara] Apple Music playback failed",
         error,
       );
-
+    
       setStatus("error");
     }
   };
 
   useEffect(() => {
-  if (!ready || !autoplay) return;
+    if (!ready || !autoplay) return;
 
-  const music = musicRef.current;
-  if (!music?.isAuthorized) return;
+    let cancelled = false;
 
-  let cancelled = false;
+    const syncPlayback = async () => {
+      try {
+        const { instance: music } =
+          await ensureAppleMusicAuthorizedInstance();
 
-  const syncPlayback = async () => {
-    try {
-      await music.setQueue({
-        song: appleTrackId,
-        autoplay: true,
-      });
+        if (cancelled) return;
 
-      if (cancelled) return;
+        musicRef.current = music;
 
-      await music.play();
-    } catch (error) {
-      if (cancelled) return;
+        await music.setQueue({
+          song: appleTrackId,
+          startPlaying: true,
+        });
 
-      console.error(
-        "[Groovara] Apple Music autoplay failed",
-        error,
-      );
-    }
-  };
+        if (cancelled) return;
 
-  void syncPlayback();
+        await music.play();
+      } catch (error) {
+        if (cancelled) return;
 
-  return () => {
-    cancelled = true;
-  };
-}, [appleTrackId, autoplay, ready]);
+        console.error(
+          "[Groovara] Apple Music autoplay failed",
+          error,
+        );
+      }
+    };
+
+    void syncPlayback();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appleTrackId, autoplay, ready]);
 
   /*
    * This is the important mobile path: REVEAL/NEXT dispatches this
@@ -880,7 +709,7 @@ function AppleMusicPlayer({
    */
   useEffect(() => {
     const activate = () => {
-      void playCurrent(true);
+      void playCurrent();
     };
 
     window.addEventListener(MEDIA_ACTIVATE_EVENT, activate);
@@ -892,8 +721,10 @@ function AppleMusicPlayer({
 
   const pause = async () => {
     try {
-      const music =
-        musicRef.current ?? (await getMusicKitInstance());
+      const { instance: music } =
+        await ensureAppleMusicAuthorizedInstance();
+
+      musicRef.current = music;
 
       await music.pause();
       setStatus("ready");
@@ -924,7 +755,7 @@ function AppleMusicPlayer({
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => void playCurrent(true)}
+          onClick={() => void playCurrent()}
           className="rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-xs tracking-wider gv-accent transition hover:bg-purple-500/20"
         >
           {status === "playing" ? "PLAYING" : "PLAY"}
