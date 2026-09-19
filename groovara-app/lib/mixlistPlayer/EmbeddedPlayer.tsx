@@ -840,14 +840,39 @@ function AppleMusicPlayer({
   };
 
   useEffect(() => {
-    if (!ready || !autoplay) return;
+  if (!ready || !autoplay) return;
 
-    const music = musicRef.current;
-    if (!music?.isAuthorized) return;
+  const music = musicRef.current;
+  if (!music?.isAuthorized) return;
 
-    void playCurrent(false);
-    // appleTrackId intentionally causes queue replacement.
-  }, [appleTrackId, autoplay, ready]);
+  let cancelled = false;
+
+  const syncPlayback = async () => {
+    try {
+      await music.setQueue({
+        song: appleTrackId,
+        autoplay: true,
+      });
+
+      if (cancelled) return;
+
+      await music.play();
+    } catch (error) {
+      if (cancelled) return;
+
+      console.error(
+        "[Groovara] Apple Music autoplay failed",
+        error,
+      );
+    }
+  };
+
+  void syncPlayback();
+
+  return () => {
+    cancelled = true;
+  };
+}, [appleTrackId, autoplay, ready]);
 
   /*
    * This is the important mobile path: REVEAL/NEXT dispatches this
