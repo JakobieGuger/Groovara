@@ -583,6 +583,34 @@ function YouTubePlayer({
 /* Apple MusicKit                                                             */
 /* -------------------------------------------------------------------------- */
 
+type ApplePlaybackPlayer = {
+  currentPlaybackTime?: number;
+  currentPlaybackDuration?: number;
+  isPlaying?: boolean;
+  play: () => Promise<unknown>;
+  pause: () => Promise<unknown> | void;
+  seekToTime?: (time: number) => Promise<unknown>;
+};
+
+function getApplePlaybackPlayer(instance: unknown): ApplePlaybackPlayer | null {
+  if (!instance || typeof instance !== "object") return null;
+
+  const candidate = (instance as { player?: unknown }).player;
+  if (!candidate || typeof candidate !== "object") return null;
+
+  return candidate as ApplePlaybackPlayer;
+}
+
+function formatPlaybackTime(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+
+  const whole = Math.floor(seconds);
+  const minutes = Math.floor(whole / 60);
+  const remainder = whole % 60;
+
+  return `${minutes}:${remainder.toString().padStart(2, "0")}`;
+}
+
 function AppleMusicPlayer({
   appleTrackId,
   url,
@@ -600,16 +628,15 @@ function AppleMusicPlayer({
     ReturnType<typeof ensureAppleMusicAuthorizedInstance>
   >["instance"] | null>(null);
   const currentIdRef = useRef(appleTrackId);
-  const autoplayRef = useRef(autoplay);
-
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState<
     "loading" | "ready" | "playing" | "error"
   >("loading");
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   useEffect(() => {
     currentIdRef.current = appleTrackId;
-    autoplayRef.current = autoplay;
   }, [appleTrackId, autoplay]);
 
   useEffect(() => {
@@ -643,23 +670,24 @@ function AppleMusicPlayer({
     try {
       const { instance: music } =
         await ensureAppleMusicAuthorizedInstance();
-    
+
       musicRef.current = music;
-    
+
+      // startPlaying already starts playback. Calling play() immediately
+      // afterward causes MusicKit's "play() without a previous pause/stop"
+      // error, so do not double-start the player.
       await music.setQueue({
         song: currentIdRef.current,
         startPlaying: true,
       });
-    
-      await music.play();
-    
+
       setStatus("playing");
     } catch (error) {
       console.error(
         "[Groovara] Apple Music playback failed",
         error,
       );
-    
+
       setStatus("error");
     }
   };
@@ -683,9 +711,9 @@ function AppleMusicPlayer({
           startPlaying: true,
         });
 
-        if (cancelled) return;
-
-        await music.play();
+        if (!cancelled) {
+          setStatus("playing");
+        }
       } catch (error) {
         if (cancelled) return;
 
@@ -726,7 +754,13 @@ function AppleMusicPlayer({
 
       musicRef.current = music;
 
-      await music.pause();
+      const player = getApplePlaybackPlayer(music);
+      if (player) {
+        await Promise.resolve(player.pause());
+      } else {
+        await music.pause();
+      }
+
       setStatus("ready");
     } catch (error) {
       console.error(
@@ -735,6 +769,101 @@ function AppleMusicPlayer({
       );
     }
   };
+
+  const resume = async () => {
+    try {
+      const { instance: music } =
+        await ensureAppleMusicAuthorizedInstance();
+
+      musicRef.current = music;
+
+      const player = getApplePlaybackPlayer(music);
+      if (player) {
+        await player.play();
+      } else {
+        await music.play();
+      }
+
+      setStatus("playing");
+    } catch (error) {
+      console.error(
+        "[Groovara] Apple Music resume failed",
+        error,
+      );
+      setStatus("error");
+    }
+  };
+
+  const seek = async (nextTime: number) => {
+    const music = musicRef.current;
+    if (!music) return;
+
+    const player = getApplePlaybackPlayer(music);
+    if (!player?.seekToTime) return;
+
+    const upperBound =
+      Number.isFinite(duration) && duration > 0
+        ? duration
+        : nextTime;
+
+    const clamped = Math.max(
+      0,
+      Math.min(upperBound, nextTime),
+    );
+
+    setCurrentTime(clamped);
+
+    try {
+      await player.seekToTime(clamped);
+    } catch (error) {
+      console.error(
+        "[Groovara] Apple Music seek failed",
+        error,
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (!ready) return;
+
+    const interval = window.setInterval(() => {
+      const music = musicRef.current;
+      const player = music
+        ? getApplePlaybackPlayer(music)
+        : null;
+
+      if (!player) return;
+
+      const nextTime = Number(
+        player.currentPlaybackTime ?? 0,
+      );
+      const nextDuration = Number(
+        player.currentPlaybackDuration ?? 0,
+      );
+
+      if (Number.isFinite(nextTime) && nextTime >= 0) {
+        setCurrentTime(nextTime);
+      }
+
+      if (Number.isFinite(nextDuration) && nextDuration > 0) {
+        setDuration(nextDuration);
+      }
+
+      if (player.isPlaying === true) {
+        setStatus("playing");
+      } else if (player.isPlaying === false) {
+        setStatus((current) =>
+          current === "loading" || current === "error"
+            ? current
+            : "ready",
+        );
+      }
+    }, 500);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [ready]);
 
   return (
     <div className="rounded-2xl border border-border bg-muted/80 p-4">
@@ -752,33 +881,63 @@ function AppleMusicPlayer({
         </p>
       ) : null}
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => void playCurrent()}
-          className="rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-xs tracking-wider gv-accent transition hover:bg-purple-500/20"
-        >
-          {status === "playing" ? "PLAYING" : "PLAY"}
-        </button>
+      <div className="mt-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <span className="w-10 text-right text-[11px] tabular-nums text-muted-foreground">
+            {formatPlaybackTime(currentTime)}
+          </span>
 
-        <button
-          type="button"
-          onClick={() => void pause()}
-          className="rounded-full border border-border bg-card/70 px-4 py-2 text-xs tracking-wider text-foreground transition hover:bg-card"
-        >
-          PAUSE
-        </button>
+          <input
+            type="range"
+            min={0}
+            max={duration > 0 ? duration : 1}
+            step={0.25}
+            value={duration > 0 ? Math.min(currentTime, duration) : 0}
+            onChange={(event) => {
+              setCurrentTime(Number(event.target.value));
+            }}
+            onPointerUp={(event) => {
+              void seek(Number(event.currentTarget.value));
+            }}
+            onKeyUp={(event) => {
+              void seek(Number(event.currentTarget.value));
+            }}
+            disabled={duration <= 0}
+            aria-label="Apple Music playback position"
+            className="min-w-0 flex-1 accent-[#5B4B6E]"
+          />
 
-        {url ? (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-full border border-border bg-card/70 px-4 py-2 text-xs tracking-wider text-foreground transition hover:bg-card"
+          <span className="w-10 text-[11px] tabular-nums text-muted-foreground">
+            {formatPlaybackTime(duration)}
+          </span>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              status === "playing"
+                ? void pause()
+                : currentTime > 0
+                  ? void resume()
+                  : void playCurrent()
+            }
+            className="rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-xs tracking-wider gv-accent transition hover:bg-purple-500/20"
           >
-            OPEN
-          </a>
-        ) : null}
+            {status === "playing" ? "PAUSE" : "PLAY"}
+          </button>
+
+          {url ? (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full border border-border bg-card/70 px-4 py-2 text-xs tracking-wider text-foreground transition hover:bg-card"
+            >
+              OPEN
+            </a>
+          ) : null}
+        </div>
       </div>
 
       {status === "loading" ? (
